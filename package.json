@@ -1,0 +1,27 @@
+{
+  "name": "@zerowidth/api",
+  "version": "0.1.0-beta",
+  "description": "for calling and interacting with the ZeroWidth api",
+  "source": "src/index.js",
+  "main": "dist/main.js",
+  "type": "module",
+  "repository": "https://pbinggeser@github.com/zerowidth-ai/api.git",
+  "author": "Peter Binggeser <pete@zerowidth.ai>",
+  "license": "MIT",
+  "private": false,
+  "scripts": {
+    "watch": "parcel watch",
+    "build": "parcel build"
+  },
+  "devDependencies": {
+    "parcel": "^2.10.2"
+  },
+  "dependencies": {
+    "axios": "^1.6.1"
+  },
+  "targets": {
+    "main": {
+      "optimize": true
+    }
+  }
+}

@@ -1,10 +1,17 @@
 {
   "name": "@zerowidth/api",
-  "version": "0.1.0-beta",
+  "version": "0.2.0-beta",
   "description": "for calling and interacting with the ZeroWidth api",
   "source": "src/index.js",
-  "main": "dist/main.js",
   "type": "module",
+  "main": "./dist/cjs/main.cjs",
+  "module": "./dist/esm/main.js",
+  "exports": {
+    ".": {
+      "import": "./dist/esm/main.js",
+      "require": "./dist/cjs/main.cjs"
+    }
+  },
   "repository": "https://pbinggeser@github.com/zerowidth-ai/api.git",
   "author": "Peter Binggeser <pete@zerowidth.ai>",
   "license": "MIT",
@@ -17,7 +24,8 @@
     "parcel": "^2.10.2"
   },
   "dependencies": {
-    "axios": "^1.6.1"
+    "axios": "^1.6.1",
+    "express": "^4.18.2"
   },
   "targets": {
     "main": {

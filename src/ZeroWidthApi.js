@@ -1,18 +1,37 @@
 import axios from 'axios';
 
+
 class ZeroWidthApi {
-  constructor({ secretKey, appId, intelligenceId }) {
+  constructor({ secretKey, endpointId, agentId, baseUrl }) {
     
     // Validate input parameters
     if (!secretKey) {
-      throw new Error('Missing required constructor parameters: secretKey, and appId must be provided');
+      throw new Error('Missing required constructor parameters: secretKey, and endpointId must be provided');
     }
 
-    this.secretKey = secretKey;
-    this.appId = appId;
-    this.intelligenceId = intelligenceId;
-    this.baseUrl = 'https://api.zerowidth.ai';
+    this.secretKey = secretKey.trim();
+    this.endpointId = endpointId;
+    this.agentId = agentId;
+    this.baseUrl = baseUrl || 'https://api.zerowidth.ai/beta';
   }
+
+
+  async executeToolFunction (toolFunction, args) {
+    try {
+      // Check if the function returns a promise
+      const result = toolFunction(args);
+      if (result instanceof Promise) {
+        // Handle as async function
+        return await result;
+      } else {
+        // Handle as a synchronous function or a function that uses a callback
+        return result;
+      }
+    } catch (error) {
+      // Handle errors
+      throw error;
+    }
+  };
 
   async makeApiCall(endpoint, options = {}) {
     const url = `${this.baseUrl}/${endpoint}`;
@@ -31,37 +50,87 @@ class ZeroWidthApi {
         data: options.body,
         params: options.params,
       });
+      
       return response.data;
     } catch (error) {
-      // console.error('Error making API call:', error);
-      throw error;
+      const { errorMessage, statusCode } = this.formatError(error);
+      
+      console.error(errorMessage);
+      
+      let err = new Error(errorMessage);
+      err.statusCode = statusCode;
+      
+      throw err;
     }
   }
 
-  // Process data through an installed intellgience
-  async process({appId, intelligenceId, data, userId, sessionId, stateful, verbose} = {}) {
-    
-    let url = `process/${appId || this.appId}/${intelligenceId || this.intelligenceId}`;
-    if(verbose) url += "?verbose=true";
+  // Process data through installed agent
+  async process({ endpointId, agentId, data, userId, sessionId, stateful, verbose, tools } = {}) {
+    let url = `process/${endpointId || this.endpointId}/${agentId || this.agentId}`;
+    if (verbose) url += "?verbose=true";
 
-    if(stateful && (!userId || !sessionId)) throw new Error("Stateful processing requires a userId and sessionId");
+    console.log('url', url);
 
+    if (stateful && (!userId || !sessionId)) {
+      throw new Error("Stateful processing requires a userId and sessionId");
+    }
 
-    return this.makeApiCall(url, {
-      method: 'POST',
-      body: {
-        user_id: userId,
-        session_id: sessionId,
-        stateful,
-        data
-      },
-    });
+    // Recursive internal function to handle tool calls
+    const processWithTools = async (requestData) => {
+      const result = await this.makeApiCall(url, {
+        method: 'post',
+        body: {
+          user_id: userId,
+          session_id: sessionId,
+          stateful,
+          data: requestData
+        },
+      });
+
+      if (tools && result.output_data && result.output_data.tool_calls) {
+
+        let messageAutoAdded = false;
+        
+
+        for (let tool_call of result.output_data.tool_calls) {
+          if (tool_call.type === 'function') {
+            if (tools.functions && tool_call.function && tools.functions[tool_call.function.name]) {
+
+              if(!messageAutoAdded){
+                // Add the API result to the messages array
+                requestData.messages.push(result.output_data);
+                messageAutoAdded = true;
+              }
+              
+              const tool_result = await this.executeToolFunction(tools.functions[tool_call.function.name], JSON.parse(tool_call.function.arguments));
+              
+
+              // Add the function response to the messages array
+              requestData.messages.push({
+                role: 'tool',
+                tool_call_id: tool_call.id,
+                content: tool_result,
+                timestamp: new Date().toISOString()
+              });
+
+            }
+          }
+        }
+
+        // Recursively process the updated request data
+        return await processWithTools(requestData);
+      }
+
+      return result;
+    };
+
+    return await processWithTools(data);
   }
 
   // Method to get history with pagination support
-  async getHistory({ appId, intelligenceId, userId, sessionId, startAfter } = {}) {
+  async getHistory({ endpointId, agentId, userId, sessionId, startAfter } = {}) {
 
-    const endpoint = `history/${appId || this.appId}/${intelligenceId || this.intelligenceId}/${userId}/${sessionId}`;
+    const endpoint = `history/${endpointId || this.endpointId}/${agentId || this.agentId}/${userId}/${sessionId}`;
     const params = startAfter ? { startAfter } : {};
 
     return this.makeApiCall(endpoint, {
@@ -70,6 +139,27 @@ class ZeroWidthApi {
     });
   }
 
+   formatError(error) {
+    let errorMessage = "An error occurred";
+    let statusCode = null;
+  
+    if (error.response) {
+      // The request was made and the server responded with a status code
+      // that falls out of the range of 2xx
+      errorMessage = `API Error: ${JSON.stringify(error.response.data, null, 2)}`;
+      statusCode = error.response.status;
+    } else if (error.request) {
+      // The request was made but no response was received
+      errorMessage = "Network Error: No response received from the server.";
+    } else {
+      // Something else, like an error in setting up the request
+      errorMessage = `Request Error: ${error.message}`;
+    }
+  
+    return { errorMessage, statusCode };
+  }
+
 }
+
 
 export default ZeroWidthApi;

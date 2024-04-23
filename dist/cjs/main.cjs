@@ -1,143 +1,18 @@
-var $a9A1a$axios = require("axios");
-var $a9A1a$express = require("express");
-
-
-function $parcel$export(e, n, v, s) {
-  Object.defineProperty(e, n, {get: v, set: s, enumerable: true, configurable: true});
-}
-
-function $parcel$interopDefault(a) {
-  return a && a.__esModule ? a.default : a;
-}
-
-$parcel$export(module.exports, "ZeroWidthApi", () => $389d33f657cf04a1$export$2e2bcd8739ae039);
-$parcel$export(module.exports, "ZeroWidthApiExpress", () => $c5b61cd6b2a52af4$export$2e2bcd8739ae039);
-// index.js
-
-class $389d33f657cf04a1$var$ZeroWidthApi {
-    constructor({ secretKey: secretKey, appId: appId, intelligenceId: intelligenceId }){
-        // Validate input parameters
-        if (!secretKey) throw new Error("Missing required constructor parameters: secretKey, and appId must be provided");
-        this.secretKey = secretKey;
-        this.appId = appId;
-        this.intelligenceId = intelligenceId;
-        this.baseUrl = "https://api.zerowidth.ai";
-    }
-    async makeApiCall(endpoint, options = {}) {
-        const url = `${this.baseUrl}/${endpoint}`;
-        const headers = {
-            "Authorization": `Bearer ${this.secretKey}`,
-            "Content-Type": "application/json",
-            ...options.headers
-        };
-        try {
-            const response = await (0, ($parcel$interopDefault($a9A1a$axios)))({
-                method: options.method || "get",
-                url: url,
-                headers: headers,
-                data: options.body,
-                params: options.params
-            });
-            return response.data;
-        } catch (error) {
-            // console.error('Error making API call:', error);
-            throw error;
-        }
-    }
-    // Process data through an installed intellgience
-    async process({ appId: appId, intelligenceId: intelligenceId, data: data, userId: userId, sessionId: sessionId, stateful: stateful, verbose: verbose } = {}) {
-        let url = `process/${appId || this.appId}/${intelligenceId || this.intelligenceId}`;
-        if (verbose) url += "?verbose=true";
-        if (stateful && (!userId || !sessionId)) throw new Error("Stateful processing requires a userId and sessionId");
-        return this.makeApiCall(url, {
-            method: "POST",
-            body: {
-                user_id: userId,
-                session_id: sessionId,
-                stateful: stateful,
-                data: data
-            }
-        });
-    }
-    // Method to get history with pagination support
-    async getHistory({ appId: appId, intelligenceId: intelligenceId, userId: userId, sessionId: sessionId, startAfter: startAfter } = {}) {
-        const endpoint = `history/${appId || this.appId}/${intelligenceId || this.intelligenceId}/${userId}/${sessionId}`;
-        const params = startAfter ? {
-            startAfter: startAfter
-        } : {};
-        return this.makeApiCall(endpoint, {
-            method: "GET",
-            params: params
-        });
-    }
-}
-var $389d33f657cf04a1$export$2e2bcd8739ae039 = $389d33f657cf04a1$var$ZeroWidthApi;
-
-
-// ZeroWidthApiMiddleware.js
-
-
-const $c5b61cd6b2a52af4$var$processRouteHandler = async (req, res, next, secretKey, onProcess, onError, returnsResponse)=>{
-    const { app_id: app_id, intelligence_id: intelligence_id } = req.params;
-    const zerowidthApi = new (0, $389d33f657cf04a1$export$2e2bcd8739ae039)({
-        secretKey: secretKey,
-        appId: app_id,
-        intelligenceId: intelligence_id
-    });
-    try {
-        const result = await zerowidthApi.process(req.body);
-        if (onProcess) onProcess(result);
-        if (returnsResponse) res.json(result.output_data);
-        else {
-            req.zerowidthResult = result;
-            next();
-        }
-    } catch (error) {
-        // console.error('API call failed:', error);
-        if (onError && error.response) onError(error.response.data);
-        res.status(500).send("Internal Server Error");
-    }
-};
-const $c5b61cd6b2a52af4$var$historyRouteHandler = async (req, res, next, secretKey, onProcess, onError, returnsResponse)=>{
-    const { app_id: app_id, intelligence_id: intelligence_id, user_id: user_id, session_id: session_id } = req.params;
-    const { startAfter: startAfter } = req.query;
-    const zerowidthApi = new (0, $389d33f657cf04a1$export$2e2bcd8739ae039)({
-        secretKey: secretKey,
-        appId: app_id,
-        intelligenceId: intelligence_id
-    });
-    try {
-        const history = await zerowidthApi.getHistory({
-            userId: user_id,
-            sessionId: session_id,
-            startAfter: startAfter
-        });
-        if (onProcess) onProcess(history);
-        if (returnsResponse) res.json(history);
-        else {
-            req.zerowidthHistory = history;
-            next();
-        }
-    } catch (error) {
-        // console.error('History retrieval failed:', error);
-        if (onError && error.response) onError(error.response.data);
-        res.status(500).send("Internal Server Error");
-    }
-};
-function $c5b61cd6b2a52af4$export$2e2bcd8739ae039({ secretKey: secretKey, onProcess: onProcess, onError: onError, returnsResponse: returnsResponse = true }) {
-    const router = (0, ($parcel$interopDefault($a9A1a$express))).Router();
-    // POST route to process data
-    router.post("/process/:app_id/:intelligence_id", (req, res, next)=>{
-        $c5b61cd6b2a52af4$var$processRouteHandler(req, res, next, secretKey, onProcess, onError, returnsResponse);
-    });
-    // GET route to retrieve history
-    router.get("/history/:app_id/:intelligence_id/:user_id/:session_id", (req, res, next)=>{
-        $c5b61cd6b2a52af4$var$historyRouteHandler(req, res, next, secretKey, onProcess, onError, returnsResponse);
-    });
-    return router;
-}
-
-
-
+var e=require("axios"),t=require("express");function r(e,t,r,s){Object.defineProperty(e,t,{get:r,set:s,enumerable:!0,configurable:!0})}function s(e){return e&&e.__esModule?e.default:e}r(module.exports,"ZeroWidthApi",()=>o),r(module.exports,"ZeroWidthApiExpress",()=>i);var o=// index.js
+class{constructor({secretKey:e,endpointId:t,agentId:r,baseUrl:s}){// Validate input parameters
+if(!e)throw Error("Missing required constructor parameters: secretKey, and endpointId must be provided");this.secretKey=e.trim(),this.endpointId=t,this.agentId=r,this.baseUrl=s||"https://api.zerowidth.ai/beta"}async executeToolFunction(e,t){try{// Check if the function returns a promise
+let r=e(t);if(r instanceof Promise)return await r;return r}catch(e){// Handle errors
+throw e}}async makeApiCall(t,r={}){let o=`${this.baseUrl}/${t}`,n={Authorization:`Bearer ${this.secretKey}`,"Content-Type":"application/json",...r.headers};try{let t=await s(e)({method:r.method||"get",url:o,headers:n,data:r.body,params:r.params});return t.data}catch(s){let{errorMessage:e,statusCode:t}=this.formatError(s);console.error(e);let r=Error(e);throw r.statusCode=t,r}}// Process data through installed agent
+async process({endpointId:e,agentId:t,data:r,userId:s,sessionId:o,stateful:n,verbose:a,tools:i}={}){let d=`process/${e||this.endpointId}/${t||this.agentId}`;if(a&&(d+="?verbose=true"),console.log("url",d),n&&(!s||!o))throw Error("Stateful processing requires a userId and sessionId");// Recursive internal function to handle tool calls
+let u=async e=>{let t=await this.makeApiCall(d,{method:"post",body:{user_id:s,session_id:o,stateful:n,data:e}});if(i&&t.output_data&&t.output_data.tool_calls){let r=!1;for(let s of t.output_data.tool_calls)if("function"===s.type&&i.functions&&s.function&&i.functions[s.function.name]){r||(// Add the API result to the messages array
+e.messages.push(t.output_data),r=!0);let o=await this.executeToolFunction(i.functions[s.function.name],JSON.parse(s.function.arguments));// Add the function response to the messages array
+e.messages.push({role:"tool",tool_call_id:s.id,content:o,timestamp:new Date().toISOString()})}// Recursively process the updated request data
+return await u(e)}return t};return await u(r)}// Method to get history with pagination support
+async getHistory({endpointId:e,agentId:t,userId:r,sessionId:s,startAfter:o}={}){let n=`history/${e||this.endpointId}/${t||this.agentId}/${r}/${s}`;return this.makeApiCall(n,{method:"GET",params:o?{startAfter:o}:{}})}formatError(e){let t="An error occurred",r=null;return e.response?(// The request was made and the server responded with a status code
+// that falls out of the range of 2xx
+t=`API Error: ${JSON.stringify(e.response.data,null,2)}`,r=e.response.status):t=e.request?"Network Error: No response received from the server.":`Request Error: ${e.message}`,{errorMessage:t,statusCode:r}}};// ZeroWidthApiMiddleware.js
+const n=async({req:e,res:t,next:r,secretKey:s,baseUrl:n,onProcess:a,onError:i,returnsResponse:d,tools:u})=>{let{endpoint_id:l,agent_id:c}=e.params,p=new o({secretKey:s,endpointId:l,agentId:c,baseUrl:n}),h=async e=>{try{let t=await p.process(e);return a&&a(t),t}catch(e){throw console.error("API call failed:",e),i&&e.response&&i(e.response.data),e}};try{let s=await h(e.body);d?t.json(s.output_data):(e.zerowidthResult=s,r())}catch(e){r(e)}},a=async({req:e,res:t,next:r,secretKey:s,baseUrl:n,onProcess:a,onError:i,returnsResponse:d})=>{let{endpoint_id:u,agent_id:l,user_id:c,session_id:p}=e.params,{startAfter:h}=e.query,y=new o({secretKey:s,endpointId:u,agentId:l,baseUrl:n});try{let s=await y.getHistory({userId:c,sessionId:p,startAfter:h});a&&a(s),d?t.json(s):(e.zerowidthHistory=s,r())}catch(e){console.error("History retrieval failed:",e),i&&e.response&&i(e.response.data),t.status(500).send("Internal Server Error")}};function i({secretKey:e,baseUrl:r,onProcess:o,onError:i,returnsResponse:d=!0,tools:u}){let l=s(t).Router();return(// POST route to process data
+l.post("/process/:endpoint_id/:agent_id",(t,s,a)=>{n({req:t,res:s,next:a,secretKey:e,baseUrl:r,onProcess:o,onError:i,returnsResponse:d,tools:u})}),// GET route to retrieve history
+l.get("/history/:endpoint_id/:agent_id/:user_id/:session_id",(t,s,n)=>{a({req:t,res:s,next:n,secretKey:e,baseUrl:r,onProcess:o,onError:i,returnsResponse:d})}),l)}//# sourceMappingURL=main.cjs.map
 
 //# sourceMappingURL=main.cjs.map

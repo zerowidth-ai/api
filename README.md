@@ -133,11 +133,30 @@ const app = express();
 app.use(express.json()); // for parsing application/json
 
 app.use('/api/zerowidth-proxy', ZeroWidthApiExpress({
-  secretKey: process.env.SECRET_KEY, // Your secret key for ZeroWidth API for the endpointId being used by your @zerowidth/react-api-provider
-  onProcess: (result) => { // optional function that doesn't interupt middleware flow
+  // Your secret key for ZeroWidth API for the endpointId being used by your @zerowidth/react-api-provider
+  secretKey: process.env.SECRET_KEY, 
+
+  // optional function that doesn't interupt middleware flow
+  onProcess: (result) => { 
     console.log(result);
-  }, 
-  returnsResponse: false // Set to false if you want to call next() instead of letting the middleware automatically return res.json(result.output_data)
+  },
+
+  // Set to false if you want to call next() instead of letting the middleware automatically return res.json(result.output_data)
+  returnsResponse: false, 
+
+  // Load any tool & function use onto the middleware to let the agent automatically call & process the function response
+  tools: {
+    functions: {
+      myFunction: myFunction,
+      myAsyncFunction: async (args) => { 
+        // asynchronous functions are supported
+
+        setTimeout(() => {
+          return 'Hello, world.';
+        }, 1000);
+      }
+    }
+  }
 }), (req, res, next) => {
   return res.json(req.zerowidthResult.output_data)
 });

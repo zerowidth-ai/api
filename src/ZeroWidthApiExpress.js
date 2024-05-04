@@ -15,7 +15,10 @@ const processRouteHandler = async ({ req, res, next, secretKey, baseUrl, onProce
 
   const processApiResponse = async (requestData) => {
     try {
-      const result = await zerowidthApi.process(requestData);
+      const result = await zerowidthApi.process({
+        ...requestData,
+        tools: tools,
+      });
       if (onProcess) {
         onProcess(result);
       }

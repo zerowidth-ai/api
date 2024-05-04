@@ -139,7 +139,10 @@ const $a777ca2277e3a949$var$processRouteHandler = async ({ req: req, res: res, n
     });
     const processApiResponse = async (requestData)=>{
         try {
-            const result = await zerowidthApi.process(requestData);
+            const result = await zerowidthApi.process({
+                ...requestData,
+                tools: tools
+            });
             if (onProcess) onProcess(result);
             return result;
         } catch (error) {

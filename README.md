@@ -1,8 +1,3 @@
-This package is currently in beta and versions may contain breaking changes. 
-
-All v.0.3.0-beta versions include a shift from ZeroWidth's alpha API to the new beta API. Major changes include a different naming convention (endpoints and agents) and required account credit for API usage. For alpha testers, the alpha API will remain live for a short while to allow time to migrate.
-
-
 # @zerowidth/api
 
 This package provides a simple and efficient way to interact with the ZeroWidth API. It allows you to easily make API calls to process data through agents on the ZeroWidth Workbench, where users can configure large language models (LLMs) and an ecosystem of technologies to adapt LLMs for specific applications or use cases.
@@ -12,6 +7,7 @@ This package provides a simple and efficient way to interact with the ZeroWidth 
 - Easy to use API client for the ZeroWidth AI platform.
 - Integrates with ZeroWidth's workbench for configuring and using LLMs and other models.
 - Allows for stateful and stateless processing of data.
+- Makes handling per-token streaming a breeze.
 
 ## Installation
 
@@ -25,55 +21,147 @@ yarn add @zerowidth/api
 
 ## Usage
 
-First, you need to create an instance of `ZeroWidthApi` with your secret key, endpoint collection ID, and agent ID.
+### Importing the Library
+
+You can import the library components as follows:
 
 ```javascript
 import { ZeroWidthApi } from '@zerowidth/api';
-
-const api = new ZeroWidthApi({
-  secretKey: 'your-secret-key',
-  endpointId: 'your-endpoint-id',
-  agentId: 'your-agent-id',
-});
-
-const response = await api.process({
-  data: {
-    messages: [
-      {
-        role: 'user',
-        content: 'Hello, world.'
-      }
-    ],
-    variables: {
-      NAME: "Jane"
-    }
-  }
-  // ...other options
-});
-console.log(response);
 ```
 
-## Automatic Function Calling
+### Simple Examples
 
-For agents that have been configured in the workbench with one or more Callable Functions, an additional `tools.functions` object can be passed to the `process` function, enabling this package to automatically call enabled functions when an API response requests too. This package will then automatically pass the results of the function call back into the ZeroWidth API for processing. 
+#### ZeroWidthApi Class
+
+The `ZeroWidthApi` class provides methods to interact with the ZeroWidth API.
+
+##### Basic Example
+
+```javascript
+const zeroWidthApi = new ZeroWidthApi({
+    secretKey: 'your-secret-key',
+    endpointId: 'your-endpoint-id',
+    agentId: 'your-agent-id'
+});
+
+const result = await zeroWidthApi.process({
+  data: { 
+    messages: [
+        { role: 'user', content: 'Hello' }
+    ] 
+  }
+});
+```
+
+### Detailed Examples and Configuration
+
+#### ZeroWidthApi Class
+
+##### Constructor
+
+The constructor initializes the ZeroWidthApi class.
+
+```javascript
+const zeroWidthApi = new ZeroWidthApi({
+    secretKey: 'your-secret-key',
+    endpointId: 'your-endpoint-id',
+    agentId: 'your-agent-id'
+});
+```
+
+**Parameters:**
+
+| Parameter   | Type   | Default                           | Description                          |
+|-------------|--------|-----------------------------------|--------------------------------------|
+| secretKey   | string | Required                          | The secret key for authentication.   |
+| endpointId  | string | Required                          | The endpoint ID.                     |
+| agentId     | string | Required                          | The agent ID.                        |
+
+##### `process`
+
+Processes data using the specified endpoint and agent IDs.
+
+Streaming example:
+```javascript
+const data = { 
+    messages: [
+        { role: 'user', content: 'Hello' }
+    ] 
+};
+
+await zeroWidthApi.process({
+    data,
+    stream: true,
+    on: {
+        all: (eventType, data) => {
+            console.log(`Event: ${eventType}`, data);
+        },
+        error: (error) => {
+            console.error('Error event:', error);
+        },
+        complete: (result) => {
+            console.log('Processing complete:', result);
+        }
+    }
+});
+```
+
+**Parameters:**
+
+| Parameter   | Type      | Default   | Description                             |
+|-------------|-----------|-----------|-----------------------------------------|
+| endpointId  | string    | Value passed in the constructor. | The endpoint ID (optional).             |
+| agentId     | string    | Value passed in the constructor. | The agent ID (optional).                |
+| data        | object    | Required  | The data to process.                    |
+| userId      | string    |           | The user ID for stateful processing.    |
+| sessionId   | string    |           | The session ID for stateful processing. |
+| stateful    | boolean   | false     | Whether the processing is stateful.     |
+| verbose     | boolean   | false     | Whether to enable verbose output.       |
+| tools       | object    |           | Tools for processing.                   |
+| stream      | boolean   | false     | Whether to enable streaming responses.  |
+| on          | object    |           | Event handlers for streaming.           |
+
+##### `getHistory`
+
+Retrieves the history for a specific session.
+
+```javascript
+const history = await zeroWidthApi.getHistory({
+    userId: 'user-id',
+    sessionId: 'session-id'
+});
+```
+
+**Parameters:**
+
+| Parameter   | Type      | Default   | Description                             |
+|-------------|-----------|-----------|-----------------------------------------|
+| endpointId  | string    | Value passed in the constructor. | The endpoint ID (optional).             |
+| agentId     | string    | Value passed in the constructor. | The agent ID (optional).                |
+| userId      | string    | Required  | The user ID.                            |
+| sessionId   | string    | Required  | The session ID.                         |
+| startAfter  | string    |           | Start history retrieval after this point (optional). |
+
+### Automatic Function Calling
+
+For agents that have been configured in the workbench with one or more functions, an additional `tools.functions` object can be passed to the `process` function, enabling this package to automatically call enabled functions when an API response requests too. This package will then automatically pass the results of the function call back into the ZeroWidth API for processing. 
 
 This makes it extremely easy to connect your own databases or other integrations without having to manually handle the process -> function -> process loop on your own.
 
-Functions are automatically checked for a returned promise - determining if they should be called with async/await or synchronously.
-
+Functions are automatically checked for a returned promise - determining if they should be called with async/await or synchronously. Any function called that does not have an associated declaration on this object will result in a standard tool message response, for you to manually handle the reprocessing loop.
 
 ```javascript
 import { ZeroWidthApi } from '@zerowidth/api';
 
 const myFunction = ({a, b}) => { return a + b; };
 
-const api = new ZeroWidthApi({
+const zeroWidthApi = new ZeroWidthApi({
   secretKey: 'your-secret-key',
   endpointId: 'your-endpoint-id',
   agentId: 'your-agent-id',
 });
 
-const response = await api.process({
+const response = await zeroWidthApi.process({
   data: {
     messages: [
       {
@@ -91,7 +179,6 @@ const response = await api.process({
         setTimeout(() => {
           return '$999';
         }, 1000);
-        
       },
     }
   }
@@ -99,95 +186,158 @@ const response = await api.process({
 });
 
 console.log(response);
-
-
-
 ```
 
-## As Express Middleware
+### ZeroWidthApiExpress Middleware
 
-You can use @zerowidth/api as middleware in your Express application to create a proxy endpoint for the ZeroWidth API using ES module import syntax. This is designed specifically for use hand-in-hand with @zerowidth/react-api-provider to easily develop production applications involving multiple configured LLMs.
+The `ZeroWidthApiExpress` middleware integrates ZeroWidth API with Express.js for creating simple server-side proxies to enable the front end of your application to determine the request logic, while keeping the Secret Key safely stored on your server.
+
+#### Initialization
 
 ```javascript
 import express from 'express';
-import { ZeroWidthApiExpress } from '@zerowidth/api';
-
-const app = express();
-app.use(express.json()); // for parsing application/json
-
-// attach the middleware on the path that matches what you've configured in <ZeroWidthApiProvider>
-app.use('/api/zerowidth-proxy', ZeroWidthApiExpress({
-  secretKey: process.env.SECRET_KEY, // Your secret key for ZeroWidth API
-}));
-
-app.listen(3000, () => console.log('Server running on port 3000'));
-```
-
-You can also pass in your own `onProcess` function to monitor the full processing result and/or set `returnsResponse` to false to have the middleware store the results as `req.zerowidthResults` to be handled by your next chosen middleware.
-```javascript
-import express from 'express';
-import { ZeroWidthApiExpress } from '@zerowidth/api';
+import ZeroWidthApiExpress from '@zerowidth/api';
 
 const app = express();
 
-app.use(express.json()); // for parsing application/json
-
-app.use('/api/zerowidth-proxy', ZeroWidthApiExpress({
-  // Your secret key for ZeroWidth API for the endpointId being used by your @zerowidth/react-api-provider
-  secretKey: process.env.SECRET_KEY, 
-
-  // optional function that doesn't interupt middleware flow
-  onProcess: (result) => { 
-    console.log(result);
-  },
-
-  // Set to false if you want to call next() instead of letting the middleware automatically return res.json(result.output_data)
-  returnsResponse: false, 
-
-  // Load any tool & function use onto the middleware to let the agent automatically call & process the function response
-  tools: {
-    functions: {
-      myFunction: myFunction,
-      myAsyncFunction: async (args) => { 
-        // asynchronous functions are supported
-
-        setTimeout(() => {
-          return 'Hello, world.';
-        }, 1000);
-      }
-    }
-  }
-}), (req, res, next) => {
-  return res.json(req.zerowidthResult.output_data)
+const zeroWidthApiExpress = ZeroWidthApiExpress({
+    secretKey: 'your-secret-key',
+    on: {
+        complete: (result) => {
+            console.log('Request complete:', result);
+        },
+        error: (error) => {
+            console.error('Request error:', error);
+        }
+    },
+    variables: async (req) => {
+        // Optional function for adding server-side variables to the request
+        
+        return {
+            // Additional variables to include in every request
+        };
+    },
+    tools: {}
 });
 
-app.listen(3000, () => console.log('Server running on port 3000'));
+app.use('/api', zeroWidthApiExpress);
+
+app.listen(3000, () => {
+    console.log('Server is running on port 3000');
+});
 ```
 
+**Parameters:**
 
-## API Reference
+| Parameter       | Type     | Default                          | Description                             |
+|-----------------|----------|----------------------------------|-----------------------------------------|
+| secretKey       | string   | Required                         | The secret key for authentication.      |
+| on              | object   |                                  | Event handlers for processing & streaming.          |
+| variables       | function |                                  | Variables to include in every request.  |
+| returnsResponse | boolean  | true                             | Whether the middleware returns responses directly. |
+| tools           | object   |                                  | Tools for automatic function calling. |
 
-### `new ZeroWidthApi(config)`
+#### Routes
 
-Creates a new `ZeroWidthApi` instance.
+The middleware provides two main routes, which are automatically linked and leveraged by @zerowidth/react-api-provider if developing a React-based front-end.
 
-- `config`: An object containing the following properties:
-  - `secretKey`: Your API secret key.
-  - `endpointId`: Your application ID on the ZeroWidth platform.
-  - `agentId`: The ID of the installed agent you want to use.
+- `POST /process/:endpoint_id/:agent_id`: Processes data and optionally handles streaming responses.
+- `GET /history/:endpoint_id/:agent_id/:user_id/:session_id`: Retrieves session history.
 
-### `api.process(options)`
+---
 
-Processes data through the specified agent.
+## Handling Streaming Responses with SSEs
 
-- `options`: An object containing the following properties:
-  - `messages`: An array of message objects (for stateless processing).
-  - `message`: A single message object (for stateful processing).
-  - `variables`: Any variables required for processing.
-  - `userId`: The user's ID (required for stateful processing).
-  - `sessionId`: The session ID (required for stateful processing).
-  - `stateful`: A boolean indicating whether the processing is stateful.
-  - `verbose`: A boolean to enable verbose mode.
+The ZeroWidth API supports streaming responses using Server-Sent Events (SSEs). This allows you to receive real-time updates from the API as events occur. To handle streaming responses, enable the `stream` option in the `process` method or request body, and provide event handlers in the `on` option.
+
+#### Example with Streaming
+
+```javascript
+const zeroWidthApi = new ZeroWidthApi({
+    secretKey: 'your-secret-key',
+    endpointId: 'your-endpoint-id',
+    agentId: 'your-agent-id'
+});
+
+const data = {
+    messages: [
+        { role: 'user', content: 'Hello' }
+    ]
+};
+
+await zeroWidthApi.process({
+    data: data,
+    stream: true,
+    on: {
+        all: (eventType, data) => {
+            console.log(`Event: ${eventType}`, data);
+        },
+        error: (error) => {
+            console.error('Error event:', error);
+        },
+        complete: (result) => {
+            console.log('Processing complete:', result);
+        }
+    }
+});
+```
+
+In this example, the `stream` option is set to `true`, and various event handlers are provided in the `on` option to handle different events:
+
+- `all`: Handles all events and logs them.
+- `error`: Handles error events.
+- `complete`: Handles the completion of the streaming process.
+
+#### Event Types
+
+The event handlers can handle different types of events emitted during the streaming process. Here are some common event types:
+
+- `open`: Emitted when the stream is opened.
+- `message`: Emitted when a message is received.
+- `error`: Emitted when an error occurs.
+- `complete`: Emitted when the streaming process is complete.
+- `close`: Emitted when the stream is closed.
+
+#### Using Streaming in Express.js
+
+You can also handle streaming responses in an Express.js application using the `ZeroWidthApiExpress` middleware. Here, the event handlers offer additional debugging options, while the actual SSEs are automatically forwarded to the client.
+
+```javascript
+import express from 'express';
+import ZeroWidthApiExpress from '@zerowidth/api';
+
+const app = express();
+
+const zeroWidthApiExpress = ZeroWidthApiExpress({
+    secretKey: 'your-secret-key',
+    baseUrl: 'https://api.zerowidth.ai/beta',
+    on: {
+        all: (eventType, data) => {
+            console.log(`Event: ${eventType}`, data);
+        },
+        error: (error) => {
+            console.error('Error event:', error);
+        },
+        complete: (result) => {
+            console.log('Processing complete:', result);
+        }
+    }
+});
+
+app.use('/api', zeroWidthApiExpress);
+
+app.listen(3000, () => {
+    console.log('Server is running on port 3000');
+});
+```
+
+In this setup, the middleware is configured to handle streaming responses, and the same event handlers are used to log events and handle errors and completion.
+
+---
+
+## License
+
+This project is licensed under the MIT License.
 
 ## Contributing
 
@@ -197,10 +347,6 @@ Contributions to the `@zerowidth/api` package are welcome. Please follow the ste
 2. Commit your changes: `git commit -am 'Add some feature'`.
 3. Push to the branch: `git push origin my-new-feature`.
 4. Submit a pull request.
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Support
 

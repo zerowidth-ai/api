@@ -5,11 +5,12 @@ var e=require("express"),t=require("compression");function r(e,t,r,s){Object.def
    * Constructor for initializing the ZeroWidthApi class.
    * @param {Object} config - The configuration object.
    * @param {string} config.secretKey - The secret key for authentication.
-   * @param {string} config.endpointId - The endpoint ID.
+   * @param {string} config.endpointId - The endpoint ID (deprecated).
+   * @param {string} config.projectId - The project ID (replacement for endpoint ID).
    * @param {string} config.agentId - The agent ID.
    * @param {string} [config.baseUrl] - The base URL for the API.
    * @throws {Error} If required parameters are missing.
-   */constructor({secretKey:e,endpointId:t,agentId:r,baseUrl:s}){if(!e)throw Error("Missing required constructor parameters: secretKey, endpointId, and agentId must be provided");this.secretKey=e.trim(),this.endpointId=t,this.agentId=r,this.baseUrl=s||"https://api.zerowidth.ai/beta"}/**
+   */constructor({secretKey:e,endpointId:t,projectId:r,agentId:s,baseUrl:o}){if(!e)throw Error("Missing required constructor parameters: secretKey, projectId, and agentId should be provided");this.secretKey=e.trim(),this.projectId=r||t,this.agentId=s,this.baseUrl=o||"https://api.zerowidth.ai/beta"}/**
    * Executes a tool function, handling both synchronous and asynchronous functions.
    * @param {Function} toolFunction - The tool function to execute.
    * @param {Object} args - The arguments to pass to the tool function.
@@ -33,7 +34,8 @@ return JSON.parse(e);// Parse the JSON manually
    */async createFetchEventSource(e){let t=new this.FetchEventSource(e,this);return t}/**
    * Processes data using the specified endpoint and agent IDs.
    * @param {Object} params - The parameters for processing.
-   * @param {string} [params.endpointId] - The endpoint ID.
+   * @param {string} [params.endpointId] - The endpoint ID (deprecated).
+   * @param {string} [params.projectId] - The project ID (replacement for endpoint ID).
    * @param {string} [params.agentId] - The agent ID.
    * @param {Object} params.data - The data to process.
    * @param {string} [params.userId] - The user ID for stateful processing.
@@ -44,32 +46,49 @@ return JSON.parse(e);// Parse the JSON manually
    * @param {boolean} [params.stream] - Whether to enable streaming responses.
    * @returns {Promise<Object>} The result of the processing.
    * @throws {Error} If required parameters are missing or if the processing fails.
-   */async process({endpointId:e,agentId:t,data:r,userId:s,sessionId:o,stateful:a,verbose:n,tools:i,stream:l,on:d}={}){let u=`process/${e||this.endpointId}/${t||this.agentId}`;if(n&&(u+="?verbose=true"),a&&(!s||!o))throw Error("Stateful processing requires a userId and sessionId");let c=await this.makeApiCall(u,{method:"POST",body:{user_id:s,session_id:o,stateful:a,data:r,stream:l}},{stream:l,data:r,endpointId:e,agentId:t,userId:s,sessionId:o,stateful:a,verbose:n,tools:i,on:d});if(!l){if(i&&c.output_data&&c.output_data.tool_calls){let u=!1,p=0;for(let e of c.output_data.tool_calls)if("function"===e.type&&i.functions&&e.function&&i.functions[e.function.name]){u||(r.messages.push(c.output_data),u=!0);let t=await this.executeToolFunction(i.functions[e.function.name],JSON.parse(e.function.arguments));r.messages.push({role:"tool",tool_call_id:e.id,content:t,timestamp:new Date().toISOString()}),p++}if(p===c.output_data.tool_calls.length)return await this.process({endpointId:e,agentId:t,data:r,userId:s,sessionId:o,stateful:a,verbose:n,tools:i,stream:l,on:d})}return c}}/**
+   */async process({endpointId:e,projectId:t,agentId:r,data:s,userId:o,sessionId:a,stateful:n,verbose:i,tools:l,stream:d,on:u}={}){let c=t||e||this.projectId,p=`process/${c}/${r||this.agentId}`;if(i&&(p+="?verbose=true"),n&&(!o||!a))throw Error("Stateful processing requires a userId and sessionId");let f=await this.makeApiCall(p,{method:"POST",body:{user_id:o,session_id:a,stateful:n,data:s,stream:d}},{stream:d,data:s,projectId:c,agentId:r,userId:o,sessionId:a,stateful:n,verbose:i,tools:l,on:u});if(!d){if(l&&f.output_data&&f.output_data.tool_calls){let e=!1,t=0;for(let r of f.output_data.tool_calls)if("function"===r.type&&l.functions&&r.function&&l.functions[r.function.name]){e||(s.messages.push(f.output_data),e=!0);let o=await this.executeToolFunction(l.functions[r.function.name],JSON.parse(r.function.arguments));s.messages.push({role:"tool",tool_call_id:r.id,content:o,timestamp:new Date().toISOString()}),t++}if(t===f.output_data.tool_calls.length)return await this.process({projectId:c,agentId:r,data:s,userId:o,sessionId:a,stateful:n,verbose:i,tools:l,stream:d,on:u})}return f}}/**
    * Initializes the event source by reading from the stream and emitting events.
-   */handleStreamedResponse=({readableStream:e,originalRequest:t})=>{let r="",s=null,o=[],a=new TextDecoder("utf-8",{ignoreBOM:!0,fatal:!0}),n="",i=(e,r)=>{t.on&&t.on[e]&&t.on[e](r),t.on&&t.on.all&&t.on.all(e,r)},l=async()=>{if(s&&o.length){let e=o.join("\n").trim();try{let r=JSON.parse(e);if("outputProgress"===s&&((null===r.partial_content||void 0===r.partial_content)&&(r.partial_content=""),n+=r.partial_content,r.content_so_far=n),"complete"===s){let e=0;if(t.tools&&r.output_data&&r.output_data.tool_calls&&r.output_data.tool_calls.length>0){let s=!1;for(let o of r.output_data.tool_calls)if("function"===o.type){if(t.tools.functions&&o.function&&t.tools.functions[o.function.name]){s||(t.data.messages.push(r.output_data),s=!0),i("tool",{role:"tool",tool_call:o});let a=await this.executeToolFunction(t.tools.functions[o.function.name],JSON.parse(o.function.arguments));t.data.messages.push({role:"tool",tool_call_id:o.id,content:a,timestamp:new Date().toISOString()}),e++}else i("tool",{role:"tool",tool_call:o})}if(e===r.output_data.tool_calls.length)return await this.process({endpointId:t.endpointId,agentId:t.agentId,data:t.data,userId:t.userId,sessionId:t.sessionId,stateful:t.stateful,verbose:t.verbose,tools:t.tools,stream:t.stream,on:t.on})}}i(s,r)}catch(e){i("error",e)}}s=null,o=[]},d=async()=>{let t=e.getReader();try{for(;;){let{done:e,value:n}=await t.read();if(e){if(""!==r.trim()){if(r+="\n\n",s)await l();else try{let e=JSON.parse(r.trim());i("errorEvent",e)}catch(e){i("error",{message:"Failed to parse JSON",buffer:r})}}i("close");break}r+=a.decode(n,{stream:!0});let d=r.split("\n");r=d.pop(),d.forEach(async e=>{e.startsWith("event: ")?(null!==s&&await l(),s=e.substring(7).trim()):e.startsWith("data: ")?o.push(e.substring(6)):""===e.trim()&&await l()})}}catch(e){i("error",{message:"Stream read error",error:e})}};d()};/**
+   */handleStreamedResponse=({readableStream:e,originalRequest:t})=>{let r="",s=null,o=[],a=new TextDecoder("utf-8",{ignoreBOM:!0,fatal:!0}),n="",i=(e,r)=>{t.on&&t.on[e]&&t.on[e](r),t.on&&t.on.all&&t.on.all(e,r)},l=async()=>{if(s&&o.length){let e=o.join("\n").trim();try{let r=JSON.parse(e);if("outputProgress"===s&&((null===r.partial_content||void 0===r.partial_content)&&(r.partial_content=""),n+=r.partial_content,r.content_so_far=n),"complete"===s){let e=0;if(t.tools&&r.output_data&&r.output_data.tool_calls&&r.output_data.tool_calls.length>0){let s=!1;for(let o of r.output_data.tool_calls)if("function"===o.type){if(t.tools.functions&&o.function&&t.tools.functions[o.function.name]){s||(t.data.messages.push(r.output_data),s=!0),i("tool",{role:"tool",tool_call:o});let a=await this.executeToolFunction(t.tools.functions[o.function.name],JSON.parse(o.function.arguments));t.data.messages.push({role:"tool",tool_call_id:o.id,content:a,timestamp:new Date().toISOString()}),e++}else i("tool",{role:"tool",tool_call:o})}if(e===r.output_data.tool_calls.length)return await this.process({projectId:t.projectId,agentId:t.agentId,data:t.data,userId:t.userId,sessionId:t.sessionId,stateful:t.stateful,verbose:t.verbose,tools:t.tools,stream:t.stream,on:t.on})}}i(s,r)}catch(e){i("error",e)}}s=null,o=[]},d=async()=>{let t=e.getReader();try{for(;;){let{done:e,value:n}=await t.read();if(e){if(""!==r.trim()){if(r+="\n\n",s)await l();else try{let e=JSON.parse(r.trim());i("errorEvent",e)}catch(e){i("error",{message:"Failed to parse JSON",buffer:r})}}i("close");break}r+=a.decode(n,{stream:!0});let d=r.split("\n");r=d.pop(),d.forEach(async e=>{e.startsWith("event: ")?(null!==s&&await l(),s=e.substring(7).trim()):e.startsWith("data: ")?o.push(e.substring(6)):""===e.trim()&&await l()})}}catch(e){i("error",{message:"Stream read error",error:e})}};d()};/**
    * Retrieves the history for a specific session.
    * @param {Object} params - The parameters for retrieving the history.
-   * @param {string} [params.endpointId] - The endpoint ID.
+   * @param {string} [params.endpointId] - The endpoint ID (deprecated).
+   * @param {string} [params.projectId] - The project ID (replacement for endpoint ID).
    * @param {string} [params.agentId] - The agent ID.
    * @param {string} params.userId - The user ID.
    * @param {string} params.sessionId - The session ID.
    * @param {string} [params.startAfter] - The starting point for history retrieval.
    * @returns {Promise<Object>} The history data.
    * @throws {Error} If the API call fails.
-   */async getHistory({endpointId:e,agentId:t,userId:r,sessionId:s,startAfter:o}={}){let a=`history/${e||this.endpointId}/${t||this.agentId}/${r}/${s}`;return this.makeApiCall(a,{method:"GET",params:o?{startAfter:o}:{}})}/**
+   */async getHistory({endpointId:e,projectId:t,agentId:r,userId:s,sessionId:o,startAfter:a}={}){let n=`history/${t||e||this.projectId}/${r||this.agentId}/${s}/${o}`;return this.makeApiCall(n,{method:"GET",params:a?{startAfter:a}:{}})}/**
+   * Submits a report for a specific session.
+   * @param {Object} params - The parameters for submitting the report.
+   * @param {string} [params.endpointId] - The endpoint ID (deprecated).
+   * @param {string} [params.projectId] - The project ID (replacement for endpoint ID).
+   * @param {string} [params.agentId] - The agent ID.
+   * @param {Object} [params.data] - The optional JSON object containing the detailed API response.
+   * @param {string} [params.userId] - The user ID.
+   * @param {string} [params.sessionId] - The session ID.
+   * @param {string} params.type - The type of the report (e.g., 'positive', 'negative', 'neutral').
+   * @param {string} params.category - The category of the report (e.g., 'accuracy', 'hallucination').
+   * @param {string} [params.details] - Additional details provided by the user (max 500 characters).
+   * @returns {Promise<Object>} The result of the report submission.
+   * @throws {Error} If the API call fails.
+   */async report({endpointId:e,projectId:t,agentId:r,data:s,userId:o,sessionId:a,type:n,category:i,details:l}={}){// Construct the endpoint URL using provided or default IDs
+let d=`report/${t||e||this.projectId}/${r||this.agentId}`;// Make the API call to submit the report
+try{let e=await this.makeApiCall(d,{method:"POST",body:{user_id:o||null,session_id:a||null,data:s||null,type:n,category:i||null,details:l||null// Optional: Additional user-provided details (string)
+}});return e}catch(e){throw console.error("Error submitting report:",e),Error("Failed to submit report")}}/**
    * Formats an error object for better readability.
    * @param {Error} error - The error object to format.
    * @returns {Object} An object containing the formatted error message and status code.
    */formatError(e){let t="An error occurred",r=null;return e.response?(t=`API Error: ${e.response.statusText||e.message}`,r=e.response.status):t=e.request?"Network Error: No response received from the server.":`Request Error: ${e.message}`,{errorMessage:t,statusCode:r}}};// ZeroWidthApiMiddleware.js
-const a=async({req:e,res:t,next:r,secretKey:s,baseUrl:a,returnsResponse:n,variables:i,tools:l,on:d})=>{let{endpoint_id:u,agent_id:c}=e.params,p=new o({secretKey:s,endpointId:u,agentId:c,baseUrl:a}),f=async r=>{let s,o=0;if(i){if("function"==typeof i){let t=await i(e);r.data.variables={...r.data.variables,...t}}else"object"==typeof i&&(r.data.variables={...r.data.variables,...i})}try{let e=await p.process({...r,tools:l,on:{...d,all:(e,a)=>{// Was the original requestData in stream mode?
+const a=async({req:e,res:t,next:r,secretKey:s,baseUrl:a,returnsResponse:n,variables:i,tools:l,on:d,useCompression:u})=>{let{project_id:c,agent_id:p}=e.params,f=new o({secretKey:s,projectId:c,agentId:p,baseUrl:a}),h=async r=>{let s,o=0;if(i){if("function"==typeof i){let t=await i(e);r.data.variables={...r.data.variables,...t}}else"object"==typeof i&&(r.data.variables={...r.data.variables,...i})}try{let e=await f.process({...r,tools:l,on:{...d,all:(e,a)=>{// Was the original requestData in stream mode?
 if(r.stream){// if the event is complete, close the connection after 1 second
-if(clearTimeout(s),0===o&&(// open the SSE
-t.setHeader("Content-Type","text/event-stream"),t.setHeader("Cache-Control","no-cache"),t.setHeader("Connection","keep-alive"),t.flushHeaders()),o++,"close"===e){s=setTimeout(()=>{t.end()},5e3);return}// if the event is open, clear the timeout in case this is a reconnection
-"open"===e&&(clearTimeout(s),o>1)||(t.write(`event: ${e}
+if(clearTimeout(s),0===o&&t.writeHead(200,{"Content-Type":"text/event-stream","Cache-Control":"no-cache",Connection:"keep-alive","X-Accel-Buffering":"no"}),o++,"close"===e){s=setTimeout(()=>{t.end()},5e3);return}// if the event is open, clear the timeout in case this is a reconnection
+("open"!==e||(clearTimeout(s),!(o>1)))&&(t.write(`event: ${e}
 `),t.write(`data: ${JSON.stringify(a)}
 
-`),t.flush())}}}});return d&&d.complete&&e&&d.complete(e),e}catch(e){throw console.error("API call failed:",e),d&&d.error&&e.response&&d.error(e.response.data),e}};try{let s=await f(e.body);e.body.stream||(n?t.json(s.output_data):(e.zerowidthResult=s,r()))}catch(e){r(e)}},n=async({req:e,res:t,next:r,secretKey:s,baseUrl:a,on:n,returnsResponse:i})=>{let{endpoint_id:l,agent_id:d,user_id:u,session_id:c}=e.params,{startAfter:p}=e.query,f=new o({secretKey:s,endpointId:l,agentId:d,baseUrl:a});try{let s=await f.getHistory({userId:u,sessionId:c,startAfter:p});onProcess&&onProcess(s),i?t.json(s):(e.zerowidthHistory=s,r())}catch(e){console.error("History retrieval failed:",e),onError&&e.response&&onError(e.response.data),t.status(500).send("Internal Server Error")}};function i({secretKey:r,baseUrl:o,on:i,variables:l,returnsResponse:d=!0,tools:u}){let c=s(e).Router();return c.use(s(t)()),// POST route to process data
-c.post("/process/:endpoint_id/:agent_id",(e,t,s)=>{a({req:e,res:t,next:s,secretKey:r,baseUrl:o,on:i,variables:l,returnsResponse:d,tools:u})}),// GET route to retrieve history
-c.get("/history/:endpoint_id/:agent_id/:user_id/:session_id",(e,t,s)=>{n({req:e,res:t,next:s,secretKey:r,baseUrl:o,on:i,returnsResponse:d})}),c}//# sourceMappingURL=main.cjs.map
+`),u&&t.flush())}}}});return d&&d.complete&&e&&d.complete(e),e}catch(e){throw console.error("API call failed:",e),d&&d.error&&e.response&&d.error(e.response.data),e}};try{let s=await h(e.body);e.body.stream||(n?t.json(s.output_data):(e.zerowidthResult=s,r()))}catch(e){r(e)}},n=async({req:e,res:t,next:r,secretKey:s,baseUrl:a,on:n,returnsResponse:i})=>{let{project_id:l,agent_id:d,user_id:u,session_id:c}=e.params,{startAfter:p}=e.query,f=new o({secretKey:s,projectId:l,agentId:d,baseUrl:a});try{let s=await f.getHistory({userId:u,sessionId:c,startAfter:p});onProcess&&onProcess(s),i?t.json(s):(e.zerowidthHistory=s,r())}catch(e){console.error("History retrieval failed:",e),onError&&e.response&&onError(e.response.data),t.status(500).send("Internal Server Error")}};function i({secretKey:r,baseUrl:o,on:i,variables:l,returnsResponse:d=!0,tools:u,useCompression:c=!0}){let p=s(e).Router();return c&&p.use(s(t)()),// POST route to process data
+p.post("/process/:project_id/:agent_id",(e,t,s)=>{a({req:e,res:t,next:s,secretKey:r,baseUrl:o,on:i,variables:l,returnsResponse:d,tools:u,useCompression:c})}),// GET route to retrieve history
+p.get("/history/:project_id/:agent_id/:user_id/:session_id",(e,t,s)=>{n({req:e,res:t,next:s,secretKey:r,baseUrl:o,on:i,returnsResponse:d})}),p}//# sourceMappingURL=main.cjs.map
 
 //# sourceMappingURL=main.cjs.map

@@ -3,12 +3,12 @@ import express from 'express';
 import ZeroWidthApi from './ZeroWidthApi.js'; 
 import compression from 'compression';
 
-const processRouteHandler = async ({ req, res, next, secretKey, baseUrl, returnsResponse, variables,  tools, on }) => {
-  const { endpoint_id, agent_id } = req.params;
+const processRouteHandler = async ({ req, res, next, secretKey, baseUrl, returnsResponse, variables,  tools, on, useCompression }) => {
+  const { project_id, agent_id } = req.params;
 
   const zerowidthApi = new ZeroWidthApi({
     secretKey: secretKey,
-    endpointId: endpoint_id,
+    projectId: project_id,
     agentId: agent_id,
     baseUrl: baseUrl
   });
@@ -48,10 +48,12 @@ const processRouteHandler = async ({ req, res, next, secretKey, baseUrl, returns
 
               if(eventsSentCounter === 0) {
                 // open the SSE
-                res.setHeader('Content-Type', 'text/event-stream');
-                res.setHeader('Cache-Control', 'no-cache');
-                res.setHeader('Connection', 'keep-alive');
-                res.flushHeaders();
+                res.writeHead(200, {
+                  'Content-Type': 'text/event-stream',
+                  'Cache-Control': 'no-cache',
+                  'Connection': 'keep-alive',
+                  'X-Accel-Buffering': 'no'
+                });
               }
 
               eventsSentCounter++;
@@ -75,8 +77,8 @@ const processRouteHandler = async ({ req, res, next, secretKey, baseUrl, returns
               
               res.write(`event: ${eventType}\n`);
               res.write(`data: ${JSON.stringify(data)}\n\n`);
-              res.flush();
-            
+
+              if(useCompression) res.flush();
             }
           }
         }
@@ -118,13 +120,13 @@ const processRouteHandler = async ({ req, res, next, secretKey, baseUrl, returns
 
 
 const historyRouteHandler = async ({req, res, next, secretKey, baseUrl, on, returnsResponse}) => {
-  const { endpoint_id, agent_id, user_id, session_id } = req.params;
+  const { project_id, agent_id, user_id, session_id } = req.params;
   const { startAfter } = req.query;
   
   
   const zerowidthApi = new ZeroWidthApi({
     secretKey: secretKey,
-    endpointId: endpoint_id,
+    projectId: project_id,
     agentId: agent_id,
     baseUrl: baseUrl
   });
@@ -157,18 +159,20 @@ const historyRouteHandler = async ({req, res, next, secretKey, baseUrl, on, retu
   }
 };
 
-export default function ZeroWidthApiExpress({ secretKey, baseUrl, on, variables, returnsResponse = true, tools }) {
+export default function ZeroWidthApiExpress({ secretKey, baseUrl, on, variables, returnsResponse = true, tools, useCompression = true}) {
   const router = express.Router();
 
-  router.use(compression());
+  if(useCompression){
+    router.use(compression());
+  }
 
   // POST route to process data
-  router.post('/process/:endpoint_id/:agent_id', (req, res, next) => {
-    processRouteHandler({req, res, next, secretKey, baseUrl, on, variables, returnsResponse, tools});
+  router.post('/process/:project_id/:agent_id', (req, res, next) => {
+    processRouteHandler({req, res, next, secretKey, baseUrl, on, variables, returnsResponse, tools, useCompression});
   });
 
   // GET route to retrieve history
-  router.get('/history/:endpoint_id/:agent_id/:user_id/:session_id', (req, res, next) => {
+  router.get('/history/:project_id/:agent_id/:user_id/:session_id', (req, res, next) => {
     historyRouteHandler({req, res, next, secretKey, baseUrl, on, returnsResponse});
   });
 

@@ -4,7 +4,7 @@ import { ZeroWidthApi } from '../dist/esm/main.js';
 async function main() {
   const api = new ZeroWidthApi({
     secretKey: config.SECRET_KEY,
-    endpointId: config.ENDPOINT_ID,
+    projectId: config.PROJECT_ID,
     agentId: config.AGENT_ID,
   });
 
@@ -19,7 +19,6 @@ async function main() {
         }
       ]
     },
-
     on: {
       open: () => {
         console.log('Connection opened');
@@ -42,29 +41,6 @@ async function main() {
     }
   });
 
-  // response.on('open', () => {
-  //   console.log('Streaming connection opened');
-  // });
-
-  // response.on('close', () => {
-  //   console.log('Streaming connection closed');
-  // });
-
-  // response.on('progress', (data) => {
-  //   console.log('Streaming progress:', data);
-  // });
-
-  // response.on('complete', (data) => {
-  //   console.log('Streaming complete:', JSON.stringify(data.output_data,null,2));
-  // });
-
-  // response.on('error', (error) => {
-  //   console.error('Streaming error:', error);
-  // });
-
-  // response.on('outputProgress', (data) => {
-  //   console.log('Streaming output', data);
-  // });
 
 }
 

@@ -40,8 +40,8 @@ The `ZeroWidthApi` class provides methods to interact with the ZeroWidth API.
 ```javascript
 const zeroWidthApi = new ZeroWidthApi({
     secretKey: 'your-secret-key',
-    endpointId: 'your-endpoint-id',
-    agentId: 'your-agent-id'
+    projectId: 'your-project-id',
+    agentId: 'your-agent-flow-id'
 });
 
 const result = await zeroWidthApi.process({
@@ -64,8 +64,8 @@ The constructor initializes the ZeroWidthApi class.
 ```javascript
 const zeroWidthApi = new ZeroWidthApi({
     secretKey: 'your-secret-key',
-    endpointId: 'your-endpoint-id',
-    agentId: 'your-agent-id'
+    projectId: 'your-project-id',
+    agentId: 'your-agent-flow-id'
 });
 ```
 
@@ -74,7 +74,7 @@ const zeroWidthApi = new ZeroWidthApi({
 | Parameter   | Type   | Default                           | Description                          |
 |-------------|--------|-----------------------------------|--------------------------------------|
 | secretKey   | string | Required                          | The secret key for authentication.   |
-| endpointId  | string | Required                          | The endpoint ID.                     |
+| projectId  | string | Required                          | The endpoint ID.                     |
 | agentId     | string | Required                          | The agent ID.                        |
 
 ##### `process`
@@ -110,7 +110,7 @@ await zeroWidthApi.process({
 
 | Parameter   | Type      | Default   | Description                             |
 |-------------|-----------|-----------|-----------------------------------------|
-| endpointId  | string    | Value passed in the constructor. | The endpoint ID (optional).             |
+| projectId  | string    | Value passed in the constructor. | The endpoint ID (optional).             |
 | agentId     | string    | Value passed in the constructor. | The agent ID (optional).                |
 | data        | object    | Required  | The data to process.                    |
 | userId      | string    |           | The user ID for stateful processing.    |
@@ -136,11 +136,41 @@ const history = await zeroWidthApi.getHistory({
 
 | Parameter   | Type      | Default   | Description                             |
 |-------------|-----------|-----------|-----------------------------------------|
-| endpointId  | string    | Value passed in the constructor. | The endpoint ID (optional).             |
+| projectId  | string    | Value passed in the constructor. | The endpoint ID (optional).             |
 | agentId     | string    | Value passed in the constructor. | The agent ID (optional).                |
 | userId      | string    | Required  | The user ID.                            |
 | sessionId   | string    | Required  | The session ID.                         |
 | startAfter  | string    |           | Start history retrieval after this point (optional). |
+
+
+##### `report`
+
+Submits a report for a specific session.
+
+```javascript
+const result = await zeroWidthApi.report({
+    type: 'positive',
+    category: 'accuracy',
+    userId: 'user-id',
+    sessionId: 'session-id',
+    details: 'Detailed feedback or report text here',
+    data: { /* Optional JSON data */ }
+});
+```
+
+**Parameters:**
+
+| Parameter   | Type      | Default   | Description                             |
+|-------------|-----------|-----------|-----------------------------------------|
+| endpointId  | string    | Value passed in the constructor. | The endpoint ID (optional).             |
+| agentId     | string    | Value passed in the constructor. | The agent ID (optional).                |
+| type        | string    | Required  | The type of the report (e.g., 'positive', 'negative', 'neutral'). |
+| category    | string    | Required  | The category of the report (e.g., 'accuracy', 'hallucination').   |
+| userId      | string    |           | The user ID (optional).                            |
+| sessionId   | string    |           | The session ID (optional).                         |
+| details     | string    |           | Additional details provided by the user (optional, max 500 characters). |
+| data        | object    |           | Optional JSON object containing the detailed API response.               |
+
 
 ### Automatic Function Calling
 
@@ -157,8 +187,8 @@ const myFunction = ({a, b}) => { return a + b; };
 
 const zeroWidthApi = new ZeroWidthApi({
   secretKey: 'your-secret-key',
-  endpointId: 'your-endpoint-id',
-  agentId: 'your-agent-id',
+  projectId: 'your-project-id',
+  agentId: 'your-agent-flow-id',
 });
 
 const response = await zeroWidthApi.process({
@@ -255,8 +285,8 @@ The ZeroWidth API supports streaming responses using Server-Sent Events (SSEs). 
 ```javascript
 const zeroWidthApi = new ZeroWidthApi({
     secretKey: 'your-secret-key',
-    endpointId: 'your-endpoint-id',
-    agentId: 'your-agent-id'
+    projectId: 'your-project-id',
+    agentId: 'your-agent-flow-id'
 });
 
 const data = {

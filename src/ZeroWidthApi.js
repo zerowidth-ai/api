@@ -6,18 +6,19 @@ class ZeroWidthApi {
    * Constructor for initializing the ZeroWidthApi class.
    * @param {Object} config - The configuration object.
    * @param {string} config.secretKey - The secret key for authentication.
-   * @param {string} config.endpointId - The endpoint ID.
+   * @param {string} config.endpointId - The endpoint ID (deprecated).
+   * @param {string} config.projectId - The project ID (replacement for endpoint ID).
    * @param {string} config.agentId - The agent ID.
    * @param {string} [config.baseUrl] - The base URL for the API.
    * @throws {Error} If required parameters are missing.
    */
-  constructor({ secretKey, endpointId, agentId, baseUrl }) {
+  constructor({ secretKey, endpointId, projectId, agentId, baseUrl }) {
     if (!secretKey) {
-      throw new Error('Missing required constructor parameters: secretKey, endpointId, and agentId must be provided');
+      throw new Error('Missing required constructor parameters: secretKey, projectId, and agentId should be provided');
     }
 
     this.secretKey = secretKey.trim();
-    this.endpointId = endpointId;
+    this.projectId = projectId || endpointId;
     this.agentId = agentId;
     this.baseUrl = baseUrl || 'https://api.zerowidth.ai/beta';
   }
@@ -95,7 +96,8 @@ class ZeroWidthApi {
   /**
    * Processes data using the specified endpoint and agent IDs.
    * @param {Object} params - The parameters for processing.
-   * @param {string} [params.endpointId] - The endpoint ID.
+   * @param {string} [params.endpointId] - The endpoint ID (deprecated).
+   * @param {string} [params.projectId] - The project ID (replacement for endpoint ID).
    * @param {string} [params.agentId] - The agent ID.
    * @param {Object} params.data - The data to process.
    * @param {string} [params.userId] - The user ID for stateful processing.
@@ -107,9 +109,11 @@ class ZeroWidthApi {
    * @returns {Promise<Object>} The result of the processing.
    * @throws {Error} If required parameters are missing or if the processing fails.
    */
-  async process({ endpointId, agentId, data, userId, sessionId, stateful, verbose, tools, stream, on } = {}) {
+  async process({ endpointId, projectId, agentId, data, userId, sessionId, stateful, verbose, tools, stream, on } = {}) {
+
+    let pIdTouse = projectId || endpointId || this.projectId;
     
-    let url = `process/${endpointId || this.endpointId}/${agentId || this.agentId}`;
+    let url = `process/${pIdTouse}/${agentId || this.agentId}`;
     if (verbose) url += "?verbose=true";
 
     if (stateful && (!userId || !sessionId)) {
@@ -128,7 +132,7 @@ class ZeroWidthApi {
     }, {
       stream,
       data,
-      endpointId,
+      projectId: pIdTouse,
       agentId,
       userId,
       sessionId,
@@ -166,7 +170,7 @@ class ZeroWidthApi {
 
         if(autoProcessedTools === result.output_data.tool_calls.length){
           return await this.process({
-            endpointId,
+            projectId: pIdTouse,
             agentId,
             data,
             userId,
@@ -183,7 +187,6 @@ class ZeroWidthApi {
       return result;
     }
   }
-
 
   /**
    * Initializes the event source by reading from the stream and emitting events.
@@ -265,7 +268,7 @@ class ZeroWidthApi {
                 if(autoProcessedTools === dataPacket.output_data.tool_calls.length){
 
                   return await this.process({
-                    endpointId: originalRequest.endpointId,
+                    projectId: originalRequest.projectId,
                     agentId: originalRequest.agentId,
                     data: originalRequest.data,
                     userId: originalRequest.userId,
@@ -341,7 +344,8 @@ class ZeroWidthApi {
   /**
    * Retrieves the history for a specific session.
    * @param {Object} params - The parameters for retrieving the history.
-   * @param {string} [params.endpointId] - The endpoint ID.
+   * @param {string} [params.endpointId] - The endpoint ID (deprecated).
+   * @param {string} [params.projectId] - The project ID (replacement for endpoint ID).
    * @param {string} [params.agentId] - The agent ID.
    * @param {string} params.userId - The user ID.
    * @param {string} params.sessionId - The session ID.
@@ -349,8 +353,8 @@ class ZeroWidthApi {
    * @returns {Promise<Object>} The history data.
    * @throws {Error} If the API call fails.
    */
-  async getHistory({ endpointId, agentId, userId, sessionId, startAfter } = {}) {
-    const endpoint = `history/${endpointId || this.endpointId}/${agentId || this.agentId}/${userId}/${sessionId}`;
+  async getHistory({ endpointId, projectId, agentId, userId, sessionId, startAfter } = {}) {
+    const endpoint = `history/${projectId || endpointId || this.projectId}/${agentId || this.agentId}/${userId}/${sessionId}`;
     const params = startAfter ? { startAfter } : {};
 
     return this.makeApiCall(endpoint, {
@@ -358,6 +362,51 @@ class ZeroWidthApi {
       params: params,
     });
   }
+
+  /**
+   * Submits a report for a specific session.
+   * @param {Object} params - The parameters for submitting the report.
+   * @param {string} [params.endpointId] - The endpoint ID (deprecated).
+   * @param {string} [params.projectId] - The project ID (replacement for endpoint ID).
+   * @param {string} [params.agentId] - The agent ID.
+   * @param {Object} [params.data] - The optional JSON object containing the detailed API response.
+   * @param {string} [params.userId] - The user ID.
+   * @param {string} [params.sessionId] - The session ID.
+   * @param {string} params.type - The type of the report (e.g., 'positive', 'negative', 'neutral').
+   * @param {string} params.category - The category of the report (e.g., 'accuracy', 'hallucination').
+   * @param {string} [params.details] - Additional details provided by the user (max 500 characters).
+   * @returns {Promise<Object>} The result of the report submission.
+   * @throws {Error} If the API call fails.
+   */
+  async report({ endpointId, projectId, agentId, data, userId, sessionId, type, category, details } = {}) {
+    // Construct the endpoint URL using provided or default IDs
+    const url = `report/${projectId || endpointId || this.projectId}/${agentId || this.agentId}`;
+
+    // Prepare the body of the POST request
+    const requestBody = {
+      user_id: userId || null,        // Optional: User ID
+      session_id: sessionId || null,  // Optional: Session ID
+      data: data || null,             // Optional: Detailed API response data (JSON object)
+      type,                           // Required: Type of the report (string)
+      category: category || null,     // Required: Category of the report (string)
+      details: details || null        // Optional: Additional user-provided details (string)
+    };
+
+    // Make the API call to submit the report
+    try {
+      const result = await this.makeApiCall(url, {
+        method: 'POST',
+        body: requestBody,
+      });
+      
+      return result;
+    } catch (error) {
+      console.error('Error submitting report:', error);
+      throw new Error('Failed to submit report');
+    }
+  }
+
+
 
   /**
    * Formats an error object for better readability.

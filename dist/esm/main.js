@@ -9,14 +9,15 @@ import $6XpKT$compression from "compression";
    * Constructor for initializing the ZeroWidthApi class.
    * @param {Object} config - The configuration object.
    * @param {string} config.secretKey - The secret key for authentication.
-   * @param {string} config.endpointId - The endpoint ID.
+   * @param {string} config.endpointId - The endpoint ID (deprecated).
+   * @param {string} config.projectId - The project ID (replacement for endpoint ID).
    * @param {string} config.agentId - The agent ID.
    * @param {string} [config.baseUrl] - The base URL for the API.
    * @throws {Error} If required parameters are missing.
-   */ constructor({ secretKey: secretKey, endpointId: endpointId, agentId: agentId, baseUrl: baseUrl }){
-        if (!secretKey) throw new Error("Missing required constructor parameters: secretKey, endpointId, and agentId must be provided");
+   */ constructor({ secretKey: secretKey, endpointId: endpointId, projectId: projectId, agentId: agentId, baseUrl: baseUrl }){
+        if (!secretKey) throw new Error("Missing required constructor parameters: secretKey, projectId, and agentId should be provided");
         this.secretKey = secretKey.trim();
-        this.endpointId = endpointId;
+        this.projectId = projectId || endpointId;
         this.agentId = agentId;
         this.baseUrl = baseUrl || "https://api.zerowidth.ai/beta";
     }
@@ -77,7 +78,8 @@ import $6XpKT$compression from "compression";
     /**
    * Processes data using the specified endpoint and agent IDs.
    * @param {Object} params - The parameters for processing.
-   * @param {string} [params.endpointId] - The endpoint ID.
+   * @param {string} [params.endpointId] - The endpoint ID (deprecated).
+   * @param {string} [params.projectId] - The project ID (replacement for endpoint ID).
    * @param {string} [params.agentId] - The agent ID.
    * @param {Object} params.data - The data to process.
    * @param {string} [params.userId] - The user ID for stateful processing.
@@ -88,8 +90,9 @@ import $6XpKT$compression from "compression";
    * @param {boolean} [params.stream] - Whether to enable streaming responses.
    * @returns {Promise<Object>} The result of the processing.
    * @throws {Error} If required parameters are missing or if the processing fails.
-   */ async process({ endpointId: endpointId, agentId: agentId, data: data, userId: userId, sessionId: sessionId, stateful: stateful, verbose: verbose, tools: tools, stream: stream, on: on } = {}) {
-        let url = `process/${endpointId || this.endpointId}/${agentId || this.agentId}`;
+   */ async process({ endpointId: endpointId, projectId: projectId, agentId: agentId, data: data, userId: userId, sessionId: sessionId, stateful: stateful, verbose: verbose, tools: tools, stream: stream, on: on } = {}) {
+        let pIdTouse = projectId || endpointId || this.projectId;
+        let url = `process/${pIdTouse}/${agentId || this.agentId}`;
         if (verbose) url += "?verbose=true";
         if (stateful && (!userId || !sessionId)) throw new Error("Stateful processing requires a userId and sessionId");
         const result = await this.makeApiCall(url, {
@@ -104,7 +107,7 @@ import $6XpKT$compression from "compression";
         }, {
             stream: stream,
             data: data,
-            endpointId: endpointId,
+            projectId: pIdTouse,
             agentId: agentId,
             userId: userId,
             sessionId: sessionId,
@@ -137,7 +140,7 @@ import $6XpKT$compression from "compression";
                     }
                 }
                 if (autoProcessedTools === result.output_data.tool_calls.length) return await this.process({
-                    endpointId: endpointId,
+                    projectId: pIdTouse,
                     agentId: agentId,
                     data: data,
                     userId: userId,
@@ -206,7 +209,7 @@ import $6XpKT$compression from "compression";
                                     });
                                 }
                                 if (autoProcessedTools === dataPacket.output_data.tool_calls.length) return await this.process({
-                                    endpointId: originalRequest.endpointId,
+                                    projectId: originalRequest.projectId,
                                     agentId: originalRequest.agentId,
                                     data: originalRequest.data,
                                     userId: originalRequest.userId,
@@ -275,15 +278,16 @@ import $6XpKT$compression from "compression";
     /**
    * Retrieves the history for a specific session.
    * @param {Object} params - The parameters for retrieving the history.
-   * @param {string} [params.endpointId] - The endpoint ID.
+   * @param {string} [params.endpointId] - The endpoint ID (deprecated).
+   * @param {string} [params.projectId] - The project ID (replacement for endpoint ID).
    * @param {string} [params.agentId] - The agent ID.
    * @param {string} params.userId - The user ID.
    * @param {string} params.sessionId - The session ID.
    * @param {string} [params.startAfter] - The starting point for history retrieval.
    * @returns {Promise<Object>} The history data.
    * @throws {Error} If the API call fails.
-   */ async getHistory({ endpointId: endpointId, agentId: agentId, userId: userId, sessionId: sessionId, startAfter: startAfter } = {}) {
-        const endpoint = `history/${endpointId || this.endpointId}/${agentId || this.agentId}/${userId}/${sessionId}`;
+   */ async getHistory({ endpointId: endpointId, projectId: projectId, agentId: agentId, userId: userId, sessionId: sessionId, startAfter: startAfter } = {}) {
+        const endpoint = `history/${projectId || endpointId || this.projectId}/${agentId || this.agentId}/${userId}/${sessionId}`;
         const params = startAfter ? {
             startAfter: startAfter
         } : {};
@@ -291,6 +295,44 @@ import $6XpKT$compression from "compression";
             method: "GET",
             params: params
         });
+    }
+    /**
+   * Submits a report for a specific session.
+   * @param {Object} params - The parameters for submitting the report.
+   * @param {string} [params.endpointId] - The endpoint ID (deprecated).
+   * @param {string} [params.projectId] - The project ID (replacement for endpoint ID).
+   * @param {string} [params.agentId] - The agent ID.
+   * @param {Object} [params.data] - The optional JSON object containing the detailed API response.
+   * @param {string} [params.userId] - The user ID.
+   * @param {string} [params.sessionId] - The session ID.
+   * @param {string} params.type - The type of the report (e.g., 'positive', 'negative', 'neutral').
+   * @param {string} params.category - The category of the report (e.g., 'accuracy', 'hallucination').
+   * @param {string} [params.details] - Additional details provided by the user (max 500 characters).
+   * @returns {Promise<Object>} The result of the report submission.
+   * @throws {Error} If the API call fails.
+   */ async report({ endpointId: endpointId, projectId: projectId, agentId: agentId, data: data, userId: userId, sessionId: sessionId, type: type, category: category, details: details } = {}) {
+        // Construct the endpoint URL using provided or default IDs
+        const url = `report/${projectId || endpointId || this.projectId}/${agentId || this.agentId}`;
+        // Prepare the body of the POST request
+        const requestBody = {
+            user_id: userId || null,
+            session_id: sessionId || null,
+            data: data || null,
+            type: type,
+            category: category || null,
+            details: details || null // Optional: Additional user-provided details (string)
+        };
+        // Make the API call to submit the report
+        try {
+            const result = await this.makeApiCall(url, {
+                method: "POST",
+                body: requestBody
+            });
+            return result;
+        } catch (error) {
+            console.error("Error submitting report:", error);
+            throw new Error("Failed to submit report");
+        }
     }
     /**
    * Formats an error object for better readability.
@@ -317,11 +359,11 @@ var $cea14915a7038b01$export$2e2bcd8739ae039 = $cea14915a7038b01$var$ZeroWidthAp
 
 
 
-const $a777ca2277e3a949$var$processRouteHandler = async ({ req: req, res: res, next: next, secretKey: secretKey, baseUrl: baseUrl, returnsResponse: returnsResponse, variables: variables, tools: tools, on: on })=>{
-    const { endpoint_id: endpoint_id, agent_id: agent_id } = req.params;
+const $a777ca2277e3a949$var$processRouteHandler = async ({ req: req, res: res, next: next, secretKey: secretKey, baseUrl: baseUrl, returnsResponse: returnsResponse, variables: variables, tools: tools, on: on, useCompression: useCompression })=>{
+    const { project_id: project_id, agent_id: agent_id } = req.params;
     const zerowidthApi = new (0, $cea14915a7038b01$export$2e2bcd8739ae039)({
         secretKey: secretKey,
-        endpointId: endpoint_id,
+        projectId: project_id,
         agentId: agent_id,
         baseUrl: baseUrl
     });
@@ -350,13 +392,13 @@ const $a777ca2277e3a949$var$processRouteHandler = async ({ req: req, res: res, n
                         // Was the original requestData in stream mode?
                         if (requestData.stream) {
                             clearTimeout(closeTimeout);
-                            if (eventsSentCounter === 0) {
-                                // open the SSE
-                                res.setHeader("Content-Type", "text/event-stream");
-                                res.setHeader("Cache-Control", "no-cache");
-                                res.setHeader("Connection", "keep-alive");
-                                res.flushHeaders();
-                            }
+                            if (eventsSentCounter === 0) // open the SSE
+                            res.writeHead(200, {
+                                "Content-Type": "text/event-stream",
+                                "Cache-Control": "no-cache",
+                                "Connection": "keep-alive",
+                                "X-Accel-Buffering": "no"
+                            });
                             eventsSentCounter++;
                             // if the event is complete, close the connection after 1 second
                             if (eventType === "close") {
@@ -372,7 +414,7 @@ const $a777ca2277e3a949$var$processRouteHandler = async ({ req: req, res: res, n
                             }
                             res.write(`event: ${eventType}\n`);
                             res.write(`data: ${JSON.stringify(data)}\n\n`);
-                            res.flush();
+                            if (useCompression) res.flush();
                         }
                     }
                 }
@@ -398,11 +440,11 @@ const $a777ca2277e3a949$var$processRouteHandler = async ({ req: req, res: res, n
     }
 };
 const $a777ca2277e3a949$var$historyRouteHandler = async ({ req: req, res: res, next: next, secretKey: secretKey, baseUrl: baseUrl, on: on, returnsResponse: returnsResponse })=>{
-    const { endpoint_id: endpoint_id, agent_id: agent_id, user_id: user_id, session_id: session_id } = req.params;
+    const { project_id: project_id, agent_id: agent_id, user_id: user_id, session_id: session_id } = req.params;
     const { startAfter: startAfter } = req.query;
     const zerowidthApi = new (0, $cea14915a7038b01$export$2e2bcd8739ae039)({
         secretKey: secretKey,
-        endpointId: endpoint_id,
+        projectId: project_id,
         agentId: agent_id,
         baseUrl: baseUrl
     });
@@ -424,11 +466,11 @@ const $a777ca2277e3a949$var$historyRouteHandler = async ({ req: req, res: res, n
         res.status(500).send("Internal Server Error");
     }
 };
-function $a777ca2277e3a949$export$2e2bcd8739ae039({ secretKey: secretKey, baseUrl: baseUrl, on: on, variables: variables, returnsResponse: returnsResponse = true, tools: tools }) {
+function $a777ca2277e3a949$export$2e2bcd8739ae039({ secretKey: secretKey, baseUrl: baseUrl, on: on, variables: variables, returnsResponse: returnsResponse = true, tools: tools, useCompression: useCompression = true }) {
     const router = (0, $6XpKT$express).Router();
-    router.use((0, $6XpKT$compression)());
+    if (useCompression) router.use((0, $6XpKT$compression)());
     // POST route to process data
-    router.post("/process/:endpoint_id/:agent_id", (req, res, next)=>{
+    router.post("/process/:project_id/:agent_id", (req, res, next)=>{
         $a777ca2277e3a949$var$processRouteHandler({
             req: req,
             res: res,
@@ -438,11 +480,12 @@ function $a777ca2277e3a949$export$2e2bcd8739ae039({ secretKey: secretKey, baseUr
             on: on,
             variables: variables,
             returnsResponse: returnsResponse,
-            tools: tools
+            tools: tools,
+            useCompression: useCompression
         });
     });
     // GET route to retrieve history
-    router.get("/history/:endpoint_id/:agent_id/:user_id/:session_id", (req, res, next)=>{
+    router.get("/history/:project_id/:agent_id/:user_id/:session_id", (req, res, next)=>{
         $a777ca2277e3a949$var$historyRouteHandler({
             req: req,
             res: res,

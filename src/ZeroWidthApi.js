@@ -1,3 +1,5 @@
+import { time } from "console";
+
 /**
  * ZeroWidthApi is the main class for interacting with the ZeroWidth API.
  */
@@ -20,7 +22,7 @@ class ZeroWidthApi {
     this.secretKey = secretKey.trim();
     this.projectId = projectId || endpointId;
     this.agentId = agentId;
-    this.baseUrl = baseUrl || 'https://api.zerowidth.ai/beta';
+    this.baseUrl = baseUrl || 'https://api.zerowidth.ai/v1';
   }
   
 
@@ -32,7 +34,11 @@ class ZeroWidthApi {
    * @throws {Error} If the tool function throws an error.
    */
   async executeToolFunction(toolFunction, args) {
+
     try {
+      if(typeof args !== 'object'){
+        args = JSON.parse(args);
+      }
       const result = toolFunction(args);
       if (result instanceof Promise) {
         return await result;
@@ -104,12 +110,13 @@ class ZeroWidthApi {
    * @param {string} [params.sessionId] - The session ID for stateful processing.
    * @param {boolean} [params.stateful] - Whether the processing is stateful.
    * @param {boolean} [params.verbose] - Whether to enable verbose output.
-   * @param {Object} [params.tools] - The tools to use for processing.
+   * @param {Object} [params.tools] - The tools to use for processing (will map to functions)
+   * @param {Object} [params.functions] - The tool functions to use for processing.
    * @param {boolean} [params.stream] - Whether to enable streaming responses.
    * @returns {Promise<Object>} The result of the processing.
    * @throws {Error} If required parameters are missing or if the processing fails.
    */
-  async process({ endpointId, projectId, agentId, data, userId, sessionId, stateful, verbose, tools, stream, on } = {}) {
+  async process({ endpointId, projectId, agentId, data, userId, sessionId, stateful, verbose, tools, functions, stream, on } = {}) {
 
     let pIdTouse = projectId || endpointId || this.projectId;
     
@@ -119,6 +126,15 @@ class ZeroWidthApi {
     if (stateful && (!userId || !sessionId)) {
       throw new Error("Stateful processing requires a userId and sessionId");
     }
+
+    if(tools && !functions){
+      if(tools.functions){
+        functions = tools.functions;
+      } else if(Array.isArray(tools)){
+        functions = tools;
+      }
+    }
+
 
     const result = await this.makeApiCall(url, {
       method: 'POST',
@@ -138,37 +154,43 @@ class ZeroWidthApi {
       sessionId,
       stateful,
       verbose,
-      tools,
+      functions,
       on
     });
 
     if (stream) {
       return;
     } else {
-      if (tools && result.output_data && result.output_data.tool_calls) {
+      if (functions && result.output_data && Array.isArray(result.output_data.content)) {
         let messageAutoAdded = false;
-        let autoProcessedTools = 0;
-        for (let tool_call of result.output_data.tool_calls) {
-          if (tool_call.type === 'function') {
-            if (tools.functions && tool_call.function && tools.functions[tool_call.function.name]) {
-              if (!messageAutoAdded) {
-                data.messages.push(result.output_data);
-                messageAutoAdded = true;
-              }
-
-              const tool_result = await this.executeToolFunction(tools.functions[tool_call.function.name], JSON.parse(tool_call.function.arguments));
+        let autoProcessedFunctions = 0;
+        let functionCalls = result.output_data.content.filter(content => content.type === 'function_call');
+        
+        for (let functionCall of functionCalls) {
+          if (functions && functions[functionCall.name]) {
+            
+            if (!messageAutoAdded) {
+              data.messages.push(result.output_data);
               data.messages.push({
                 role: 'tool',
-                tool_call_id: tool_call.id,
-                content: tool_result,
+                content: [],
                 timestamp: new Date().toISOString()
               });
-              autoProcessedTools++;
+              messageAutoAdded = true;
             }
+
+            const tool_result = await this.executeToolFunction(functions[functionCall.name], functionCall.arguments);
+            data.messages[data.messages.length - 1].content.push({
+              type: 'function_response',
+              name: functionCall.name,
+              result: tool_result
+            });
+            autoProcessedFunctions++;
           }
         }
 
-        if(autoProcessedTools === result.output_data.tool_calls.length){
+        if(autoProcessedFunctions === functionCalls.length){
+
           return await this.process({
             projectId: pIdTouse,
             agentId,
@@ -222,50 +244,42 @@ class ZeroWidthApi {
 
           if(eventType === 'complete'){
             
-            let autoProcessedTools = 0;
-            if (originalRequest.tools && dataPacket.output_data && dataPacket.output_data.tool_calls) {
+            let autoProcessedFunctions = 0;
+            if(dataPacket.output_data && dataPacket.output_data.content && Array.isArray(dataPacket.output_data.content)){
+              let function_calls = dataPacket.output_data.content.filter(content => content.type === 'function_call');
               
-              if(dataPacket.output_data.tool_calls.length > 0){
+              if (originalRequest.functions && function_calls.length > 0) {
                 
                 let messageAutoAdded = false;
-                for (let tool_call of dataPacket.output_data.tool_calls) {
+                for (let function_call of function_calls) {
 
-                  if (tool_call.type === 'function') {
-
-                    if (originalRequest.tools.functions && tool_call.function && originalRequest.tools.functions[tool_call.function.name]) {
-                      
-                      if (!messageAutoAdded) {
-                        originalRequest.data.messages.push(dataPacket.output_data);
-                        messageAutoAdded = true;
-                      }
-
-                      emit('tool', {
-                        role: 'tool',
-                        tool_call: tool_call,
-                      });
-
-
-                      const tool_result = await this.executeToolFunction(originalRequest.tools.functions[tool_call.function.name], JSON.parse(tool_call.function.arguments));
-                      
+                  if (originalRequest.functions && originalRequest.functions[function_call.name]) {
+                    
+                    if (!messageAutoAdded) {
+                      originalRequest.data.messages.push(dataPacket.output_data);
                       originalRequest.data.messages.push({
                         role: 'tool',
-                        tool_call_id: tool_call.id,
-                        content: tool_result,
+                        content: [],
                         timestamp: new Date().toISOString()
                       });
-
-                      autoProcessedTools++;
-                    } else {
-                      emit('tool', {
-                        role: 'tool',
-                        tool_call: tool_call,
-                      });
-                    
+                      messageAutoAdded = true;
                     }
+
+                    emit('functionCall', function_call);
+
+                    const tool_result = await this.executeToolFunction(originalRequest.functions[function_call.name], function_call.arguments);
+                    
+                    originalRequest.data.messages[originalRequest.data.messages.length - 1].content.push({
+                      type: 'function_response',
+                      name: function_call.name,
+                      result: tool_result
+                    });
+
+                    autoProcessedFunctions++;
                   }
                 }
 
-                if(autoProcessedTools === dataPacket.output_data.tool_calls.length){
+                if(autoProcessedFunctions === function_calls.length){
 
                   return await this.process({
                     projectId: originalRequest.projectId,
@@ -280,6 +294,7 @@ class ZeroWidthApi {
                     on: originalRequest.on
                   });
                 }
+              
               }
             }
           }

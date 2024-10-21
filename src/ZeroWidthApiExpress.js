@@ -3,7 +3,7 @@ import express from 'express';
 import ZeroWidthApi from './ZeroWidthApi.js'; 
 import compression from 'compression';
 
-const processRouteHandler = async ({ req, res, next, secretKey, baseUrl, returnsResponse, variables,  tools, on, useCompression }) => {
+const processRouteHandler = async ({ req, res, next, secretKey, baseUrl, returnsResponse, variables, functions, on, useCompression }) => {
   const { project_id, agent_id } = req.params;
 
   const zerowidthApi = new ZeroWidthApi({
@@ -37,7 +37,7 @@ const processRouteHandler = async ({ req, res, next, secretKey, baseUrl, returns
     try {
       const result = await zerowidthApi.process({
         ...requestData,
-        tools: tools,
+        functions: functions,
         on: {
           ...on,
           all: (eventType, data) => {
@@ -159,7 +159,7 @@ const historyRouteHandler = async ({req, res, next, secretKey, baseUrl, on, retu
   }
 };
 
-export default function ZeroWidthApiExpress({ secretKey, baseUrl, on, variables, returnsResponse = true, tools, useCompression = true}) {
+export default function ZeroWidthApiExpress({ secretKey, baseUrl, on, variables, returnsResponse = true, functions, useCompression = true}) {
   const router = express.Router();
 
   if(useCompression){
@@ -168,7 +168,7 @@ export default function ZeroWidthApiExpress({ secretKey, baseUrl, on, variables,
 
   // POST route to process data
   router.post('/process/:project_id/:agent_id', (req, res, next) => {
-    processRouteHandler({req, res, next, secretKey, baseUrl, on, variables, returnsResponse, tools, useCompression});
+    processRouteHandler({req, res, next, secretKey, baseUrl, on, variables, returnsResponse, functions, useCompression});
   });
 
   // GET route to retrieve history

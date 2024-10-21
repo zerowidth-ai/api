@@ -1,6 +1,6 @@
 {
   "name": "@zerowidth/api",
-  "version": "0.5.0-beta",
+  "version": "1.0.0",
   "description": "for calling and interacting with the ZeroWidth api",
   "source": "src/index.js",
   "type": "module",

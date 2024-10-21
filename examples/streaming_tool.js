@@ -10,26 +10,19 @@ async function main() {
   });
 
   let response = await api.process({
-    verbose: true,
     stream: true,
     data: {
       messages: [
         {
           role: "user",
-          content: "Call both test functions"
+          content: "Call the test function"
         }
       ]
     },
-    tools: {
-      functions: {
-        serverTestFunction1: args => {
-          // console.log('serverTestFunction1', args);
-          return '200';
-        },
-        serverTestFunction2: args => {
-          // console.log('serverTestFunction2', args);
-          return '200';
-        }
+    functions: {
+      testOne: args => {
+        console.log('testOne', args);
+        return '200';
       }
     },
     on: {
@@ -51,8 +44,8 @@ async function main() {
       outputProgress: (data) => {
         console.log('Output', data);
       },
-      tool: (data) => {
-        console.log('Tool:', data);
+      functionCall: (data) => {
+        console.log('Function:', data);
       }
     }
   })

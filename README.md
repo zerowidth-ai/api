@@ -7,7 +7,9 @@ This package provides a simple and efficient way to interact with the ZeroWidth 
 - Easy to use API client for the ZeroWidth AI platform.
 - Integrates with ZeroWidth's workbench for configuring and using LLMs and other models.
 - Allows for stateful and stateless processing of data.
-- Makes handling per-token streaming a breeze.
+
+## Updates
+- As of version 1.0.0 of this package, the base URL and function handling methodology now aligns with v1 of the ZeroWidth API.
 
 ## Installation
 
@@ -35,7 +37,7 @@ import { ZeroWidthApi } from '@zerowidth/api';
 
 The `ZeroWidthApi` class provides methods to interact with the ZeroWidth API.
 
-##### Basic Example
+##### Basic Conversational-Input Example
 
 ```javascript
 const zeroWidthApi = new ZeroWidthApi({
@@ -48,10 +50,50 @@ const result = await zeroWidthApi.process({
   data: { 
     messages: [
         { role: 'user', content: 'Hello' }
-    ] 
+    ],
+    variables: {
+      // Optionally, add values any variables you've configured here
+    }
   }
 });
 ```
+
+For Agent Flows with a Single-prompt input, you can pass in the prompt as a string:
+```javascript
+const result = await zeroWidthApi.process({
+  data: { 
+    prompt: "generate a report about zebras",
+    variables: {
+      // Optionally, add values any variables you've configured here
+    }
+  }
+});
+```
+
+For Agent Flows with a Single-prompt input, you can pass in the prompt as a string:
+```javascript
+const result = await zeroWidthApi.process({
+  data: { 
+    prompt: "generate a report about zebras",
+    variables: {
+      // Optionally, add values any variables you've configured here
+    }
+  }
+});
+```
+
+For Agent Flows that only need context variables, you can pass omit `messages` and `prompt` completely:
+ ```javascript
+const result = await zeroWidthApi.process({
+  data: { 
+    variables: {
+      VALUE_A: "foo",
+      OTHER_VALUE: "bar"
+    }
+  }
+});
+```
+
 
 ### Detailed Examples and Configuration
 
@@ -174,7 +216,7 @@ const result = await zeroWidthApi.report({
 
 ### Automatic Function Calling
 
-For agents that have been configured in the workbench with one or more functions, an additional `tools.functions` object can be passed to the `process` function, enabling this package to automatically call enabled functions when an API response requests too. This package will then automatically pass the results of the function call back into the ZeroWidth API for processing. 
+For agents that have been configured in the workbench with one or more functions, an additional `functions` object can be passed to the `process` method, enabling this package to automatically call enabled functions when an API response requests to. This package will then automatically pass the results of the function call back into the ZeroWidth API for processing. 
 
 This makes it extremely easy to connect your own databases or other integrations without having to manually handle the process -> function -> process loop on your own.
 
@@ -183,6 +225,7 @@ Functions are automatically checked for a returned promise - determining if they
 ```javascript
 import { ZeroWidthApi } from '@zerowidth/api';
 
+// Example function that may live somewhere else in your code
 const myFunction = ({a, b}) => { return a + b; };
 
 const zeroWidthApi = new ZeroWidthApi({
@@ -200,17 +243,15 @@ const response = await zeroWidthApi.process({
       }
     ],
   },
-  tools: {
-    functions: {
-      myFunction: myFunction,
-      querySalesDB: async (args) => { 
-        // asynchronous functions are supported
+  functions: {
+    myFunction: myFunction, // Giving the agent the ability to call this function
+    querySalesDB: async (args) => { 
+      // asynchronous functions are supported
 
-        setTimeout(() => {
-          return '$999';
-        }, 1000);
-      },
-    }
+      setTimeout(() => {
+        return '$999';
+      }, 1000);
+    },
   }
   // ...other options
 });
@@ -231,29 +272,31 @@ import ZeroWidthApiExpress from '@zerowidth/api';
 const app = express();
 
 const zeroWidthApiExpress = ZeroWidthApiExpress({
-    secretKey: 'your-secret-key',
-    on: {
-        complete: (result) => {
-            console.log('Request complete:', result);
-        },
-        error: (error) => {
-            console.error('Request error:', error);
-        }
+  secretKey: 'your-secret-key',
+  on: {
+    complete: (result) => {
+      console.log('Request complete:', result);
     },
-    variables: async (req) => {
-        // Optional function for adding server-side variables to the request
-        
-        return {
-            // Additional variables to include in every request
-        };
-    },
-    tools: {}
+    error: (error) => {
+      console.error('Request error:', error);
+    }
+  },
+  variables: async (req) => {
+    // Optional function for adding server-side variables to the request
+    
+    return {
+      // Additional variables to include in every request
+    };
+  },
+  functions: {
+    // Optional dictionary of functions that have been configured for this agent to enable automatic server-side calling & response
+  }
 });
 
-app.use('/api', zeroWidthApiExpress);
+app.use('/api/0w-proxy', zeroWidthApiExpress);
 
 app.listen(3000, () => {
-    console.log('Server is running on port 3000');
+  console.log('Server is running on port 3000');
 });
 ```
 
@@ -264,8 +307,8 @@ app.listen(3000, () => {
 | secretKey       | string   | Required                         | The secret key for authentication.      |
 | on              | object   |                                  | Event handlers for processing & streaming.          |
 | variables       | function |                                  | Variables to include in every request.  |
-| returnsResponse | boolean  | true                             | Whether the middleware returns responses directly. |
-| tools           | object   |                                  | Tools for automatic function calling. |
+| returnsResponse | boolean  | true                             | Whether the middleware returns responses directly. If set to false, the output from the ZeroWidth API will be set on `req.zerowidthResult` and the `next()` element in your configured express route will be called for custom handling. |
+| functions           | object   |                                  |  For automatic function calling. |
 
 #### Routes
 
@@ -284,31 +327,31 @@ The ZeroWidth API supports streaming responses using Server-Sent Events (SSEs). 
 
 ```javascript
 const zeroWidthApi = new ZeroWidthApi({
-    secretKey: 'your-secret-key',
-    projectId: 'your-project-id',
-    agentId: 'your-agent-flow-id'
+  secretKey: 'your-secret-key',
+  projectId: 'your-project-id',
+  agentId: 'your-agent-flow-id'
 });
 
 const data = {
-    messages: [
-        { role: 'user', content: 'Hello' }
-    ]
+  messages: [
+    { role: 'user', content: 'Hello' }
+  ]
 };
 
 await zeroWidthApi.process({
-    data: data,
-    stream: true,
-    on: {
-        all: (eventType, data) => {
-            console.log(`Event: ${eventType}`, data);
-        },
-        error: (error) => {
-            console.error('Error event:', error);
-        },
-        complete: (result) => {
-            console.log('Processing complete:', result);
-        }
+  data: data,
+  stream: true,
+  on: {
+    all: (eventType, data) => {
+      console.log(`Event: ${eventType}`, data);
+    },
+    error: (error) => {
+      console.error('Error event:', error);
+    },
+    complete: (result) => {
+      console.log('Processing complete:', result);
     }
+  }
 });
 ```
 
@@ -339,25 +382,24 @@ import ZeroWidthApiExpress from '@zerowidth/api';
 const app = express();
 
 const zeroWidthApiExpress = ZeroWidthApiExpress({
-    secretKey: 'your-secret-key',
-    baseUrl: 'https://api.zerowidth.ai/beta',
-    on: {
-        all: (eventType, data) => {
-            console.log(`Event: ${eventType}`, data);
-        },
-        error: (error) => {
-            console.error('Error event:', error);
-        },
-        complete: (result) => {
-            console.log('Processing complete:', result);
-        }
+  secretKey: 'your-secret-key',
+  on: {
+    all: (eventType, data) => {
+      console.log(`Event: ${eventType}`, data);
+    },
+    error: (error) => {
+      console.error('Error event:', error);
+    },
+    complete: (result) => {
+      console.log('Processing complete:', result);
     }
+  }
 });
 
-app.use('/api', zeroWidthApiExpress);
+app.use('/api/0w-proxy', zeroWidthApiExpress);
 
 app.listen(3000, () => {
-    console.log('Server is running on port 3000');
+  console.log('Server is running on port 3000');
 });
 ```
 

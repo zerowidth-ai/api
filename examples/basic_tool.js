@@ -10,25 +10,18 @@ async function main() {
   });
 
   let result = await api.process({
-    verbose: true,
     data: {
       messages: [
         {
           role: "user",
-          content: "Call both test functions"
+          content: "Call the test function"
         }
       ]
     },
-    tools: {
-      functions: {
-        serverTestFunction1: args => {
-          console.log('serverTestFunction1', args);
-          return '200';
-        },
-        serverTestFunction2: args => {
-          console.log('serverTestFunction2', args);
-          return '200';
-        }
+    functions: {
+      testOne: args => {
+        console.log('The test function was called', args);
+        return '200';
       }
     }
   })

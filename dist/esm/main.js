@@ -1,7 +1,9 @@
+import "console";
 import $6XpKT$express from "express";
 import $6XpKT$compression from "compression";
 
 // index.js
+
 /**
  * ZeroWidthApi is the main class for interacting with the ZeroWidth API.
  */ class $cea14915a7038b01$var$ZeroWidthApi {
@@ -19,7 +21,7 @@ import $6XpKT$compression from "compression";
         this.secretKey = secretKey.trim();
         this.projectId = projectId || endpointId;
         this.agentId = agentId;
-        this.baseUrl = baseUrl || "https://api.zerowidth.ai/beta";
+        this.baseUrl = baseUrl || "https://api.zerowidth.ai/v1";
     }
     /**
    * Executes a tool function, handling both synchronous and asynchronous functions.
@@ -29,6 +31,7 @@ import $6XpKT$compression from "compression";
    * @throws {Error} If the tool function throws an error.
    */ async executeToolFunction(toolFunction, args) {
         try {
+            if (typeof args !== "object") args = JSON.parse(args);
             const result = toolFunction(args);
             if (result instanceof Promise) return await result;
             else return result;
@@ -86,15 +89,20 @@ import $6XpKT$compression from "compression";
    * @param {string} [params.sessionId] - The session ID for stateful processing.
    * @param {boolean} [params.stateful] - Whether the processing is stateful.
    * @param {boolean} [params.verbose] - Whether to enable verbose output.
-   * @param {Object} [params.tools] - The tools to use for processing.
+   * @param {Object} [params.tools] - The tools to use for processing (will map to functions)
+   * @param {Object} [params.functions] - The tool functions to use for processing.
    * @param {boolean} [params.stream] - Whether to enable streaming responses.
    * @returns {Promise<Object>} The result of the processing.
    * @throws {Error} If required parameters are missing or if the processing fails.
-   */ async process({ endpointId: endpointId, projectId: projectId, agentId: agentId, data: data, userId: userId, sessionId: sessionId, stateful: stateful, verbose: verbose, tools: tools, stream: stream, on: on } = {}) {
+   */ async process({ endpointId: endpointId, projectId: projectId, agentId: agentId, data: data, userId: userId, sessionId: sessionId, stateful: stateful, verbose: verbose, tools: tools, functions: functions, stream: stream, on: on } = {}) {
         let pIdTouse = projectId || endpointId || this.projectId;
         let url = `process/${pIdTouse}/${agentId || this.agentId}`;
         if (verbose) url += "?verbose=true";
         if (stateful && (!userId || !sessionId)) throw new Error("Stateful processing requires a userId and sessionId");
+        if (tools && !functions) {
+            if (tools.functions) functions = tools.functions;
+            else if (Array.isArray(tools)) functions = tools;
+        }
         const result = await this.makeApiCall(url, {
             method: "POST",
             body: {
@@ -113,33 +121,34 @@ import $6XpKT$compression from "compression";
             sessionId: sessionId,
             stateful: stateful,
             verbose: verbose,
-            tools: tools,
+            functions: functions,
             on: on
         });
         if (stream) return;
         else {
-            if (tools && result.output_data && result.output_data.tool_calls) {
+            if (functions && result.output_data && Array.isArray(result.output_data.content)) {
                 let messageAutoAdded = false;
-                let autoProcessedTools = 0;
-                for (let tool_call of result.output_data.tool_calls){
-                    if (tool_call.type === "function") {
-                        if (tools.functions && tool_call.function && tools.functions[tool_call.function.name]) {
-                            if (!messageAutoAdded) {
-                                data.messages.push(result.output_data);
-                                messageAutoAdded = true;
-                            }
-                            const tool_result = await this.executeToolFunction(tools.functions[tool_call.function.name], JSON.parse(tool_call.function.arguments));
-                            data.messages.push({
-                                role: "tool",
-                                tool_call_id: tool_call.id,
-                                content: tool_result,
-                                timestamp: new Date().toISOString()
-                            });
-                            autoProcessedTools++;
-                        }
+                let autoProcessedFunctions = 0;
+                let functionCalls = result.output_data.content.filter((content)=>content.type === "function_call");
+                for (let functionCall of functionCalls)if (functions && functions[functionCall.name]) {
+                    if (!messageAutoAdded) {
+                        data.messages.push(result.output_data);
+                        data.messages.push({
+                            role: "tool",
+                            content: [],
+                            timestamp: new Date().toISOString()
+                        });
+                        messageAutoAdded = true;
                     }
+                    const tool_result = await this.executeToolFunction(functions[functionCall.name], functionCall.arguments);
+                    data.messages[data.messages.length - 1].content.push({
+                        type: "function_response",
+                        name: functionCall.name,
+                        result: tool_result
+                    });
+                    autoProcessedFunctions++;
                 }
-                if (autoProcessedTools === result.output_data.tool_calls.length) return await this.process({
+                if (autoProcessedFunctions === functionCalls.length) return await this.process({
                     projectId: pIdTouse,
                     agentId: agentId,
                     data: data,
@@ -181,34 +190,31 @@ import $6XpKT$compression from "compression";
                         dataPacket.content_so_far = cumulative_progress;
                     }
                     if (eventType === "complete") {
-                        let autoProcessedTools = 0;
-                        if (originalRequest.tools && dataPacket.output_data && dataPacket.output_data.tool_calls) {
-                            if (dataPacket.output_data.tool_calls.length > 0) {
+                        let autoProcessedFunctions = 0;
+                        if (dataPacket.output_data && dataPacket.output_data.content && Array.isArray(dataPacket.output_data.content)) {
+                            let function_calls = dataPacket.output_data.content.filter((content)=>content.type === "function_call");
+                            if (originalRequest.functions && function_calls.length > 0) {
                                 let messageAutoAdded = false;
-                                for (let tool_call of dataPacket.output_data.tool_calls)if (tool_call.type === "function") {
-                                    if (originalRequest.tools.functions && tool_call.function && originalRequest.tools.functions[tool_call.function.name]) {
-                                        if (!messageAutoAdded) {
-                                            originalRequest.data.messages.push(dataPacket.output_data);
-                                            messageAutoAdded = true;
-                                        }
-                                        emit("tool", {
-                                            role: "tool",
-                                            tool_call: tool_call
-                                        });
-                                        const tool_result = await this.executeToolFunction(originalRequest.tools.functions[tool_call.function.name], JSON.parse(tool_call.function.arguments));
+                                for (let function_call of function_calls)if (originalRequest.functions && originalRequest.functions[function_call.name]) {
+                                    if (!messageAutoAdded) {
+                                        originalRequest.data.messages.push(dataPacket.output_data);
                                         originalRequest.data.messages.push({
                                             role: "tool",
-                                            tool_call_id: tool_call.id,
-                                            content: tool_result,
+                                            content: [],
                                             timestamp: new Date().toISOString()
                                         });
-                                        autoProcessedTools++;
-                                    } else emit("tool", {
-                                        role: "tool",
-                                        tool_call: tool_call
+                                        messageAutoAdded = true;
+                                    }
+                                    emit("functionCall", function_call);
+                                    const tool_result = await this.executeToolFunction(originalRequest.functions[function_call.name], function_call.arguments);
+                                    originalRequest.data.messages[originalRequest.data.messages.length - 1].content.push({
+                                        type: "function_response",
+                                        name: function_call.name,
+                                        result: tool_result
                                     });
+                                    autoProcessedFunctions++;
                                 }
-                                if (autoProcessedTools === dataPacket.output_data.tool_calls.length) return await this.process({
+                                if (autoProcessedFunctions === function_calls.length) return await this.process({
                                     projectId: originalRequest.projectId,
                                     agentId: originalRequest.agentId,
                                     data: originalRequest.data,
@@ -359,7 +365,7 @@ var $cea14915a7038b01$export$2e2bcd8739ae039 = $cea14915a7038b01$var$ZeroWidthAp
 
 
 
-const $a777ca2277e3a949$var$processRouteHandler = async ({ req: req, res: res, next: next, secretKey: secretKey, baseUrl: baseUrl, returnsResponse: returnsResponse, variables: variables, tools: tools, on: on, useCompression: useCompression })=>{
+const $a777ca2277e3a949$var$processRouteHandler = async ({ req: req, res: res, next: next, secretKey: secretKey, baseUrl: baseUrl, returnsResponse: returnsResponse, variables: variables, functions: functions, on: on, useCompression: useCompression })=>{
     const { project_id: project_id, agent_id: agent_id } = req.params;
     const zerowidthApi = new (0, $cea14915a7038b01$export$2e2bcd8739ae039)({
         secretKey: secretKey,
@@ -385,7 +391,7 @@ const $a777ca2277e3a949$var$processRouteHandler = async ({ req: req, res: res, n
         try {
             const result = await zerowidthApi.process({
                 ...requestData,
-                tools: tools,
+                functions: functions,
                 on: {
                     ...on,
                     all: (eventType, data)=>{
@@ -466,7 +472,7 @@ const $a777ca2277e3a949$var$historyRouteHandler = async ({ req: req, res: res, n
         res.status(500).send("Internal Server Error");
     }
 };
-function $a777ca2277e3a949$export$2e2bcd8739ae039({ secretKey: secretKey, baseUrl: baseUrl, on: on, variables: variables, returnsResponse: returnsResponse = true, tools: tools, useCompression: useCompression = true }) {
+function $a777ca2277e3a949$export$2e2bcd8739ae039({ secretKey: secretKey, baseUrl: baseUrl, on: on, variables: variables, returnsResponse: returnsResponse = true, functions: functions, useCompression: useCompression = true }) {
     const router = (0, $6XpKT$express).Router();
     if (useCompression) router.use((0, $6XpKT$compression)());
     // POST route to process data
@@ -480,7 +486,7 @@ function $a777ca2277e3a949$export$2e2bcd8739ae039({ secretKey: secretKey, baseUr
             on: on,
             variables: variables,
             returnsResponse: returnsResponse,
-            tools: tools,
+            functions: functions,
             useCompression: useCompression
         });
     });
